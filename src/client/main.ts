@@ -2,15 +2,15 @@ import kaboom, { GameObj, Vec2 } from "kaboom";
 import "kaboom/global";
 
 import { io } from "socket.io-client";
-const socket = io();
+const socket = io({transports: ["websocket"] });
 
 import { Tank } from "./assets/objects/Tank";
 import { Projectile } from "./assets/projectiles/Projectile";
 import { PlayerData } from "../data-structures/PlayerData";
 
 kaboom({
-    width: innerWidth,
-    height: innerHeight,
+    width: 1920,
+    height: 1080,
     letterbox: true,
     background: [20, 20, 40],
     logTime: 3,
@@ -78,6 +78,11 @@ onUpdate("Tank", (tank) => { // Use Tank type
 
     tank.pos = tank.pos.add(velocity);
     tank.angle = tankData.angle;
+
+    if (speed || angle) {
+        const playerData = localTank.exportData();
+        socket.emit("send-player-data", playerData);
+    }
 });
 
 onUpdate("Turret", (turret) =>{
@@ -132,8 +137,14 @@ socket.emit("join-room", {
     userId: userId
 });
 
+function Lerp(start: number, end: number, t: number) {
+    return start * (1 - t) + end * t;
+}
+
 //Update Player Data Every Second
 socket.on("update-player-data", (PlayerData: PlayerData[]) => {
+    /* debug.log(Date.now()) */
+
     const allTanks = get("Tank");
 
     PlayerData.map((Player) => {
@@ -143,7 +154,7 @@ socket.on("update-player-data", (PlayerData: PlayerData[]) => {
             let tank: Tank = allTanks.find((tankObject) => Player.userId == tankObject.data.userId)?.data || new Tank(Red, `Player_${Player.userId}`, Player.userId);
 
             if (Player.userId != localTank.userId) {
-                tween(tank.tankModel.pos, vec2(Player.position.x, Player.position.y), dt()*100, (p) => tank.tankModel.pos = p, easings.linear)
+                tween(tank.tankModel.pos, vec2(Player.position.x, Player.position.y), .15, (p) => tank.tankModel.pos = p, easings.linear)
                 tank.tankModel.angle = Player.angle
             }
         }
@@ -156,12 +167,9 @@ socket.on("update-player-data", (PlayerData: PlayerData[]) => {
     })
 })
 
-
-setInterval(() => {
-    const playerData = localTank.exportData();
-    socket.emit("send-player-data", playerData);
-    debug.log("-----")
-}, 50)
+function distance(pos1: Vec2, pos2: Vec2): number {
+    return Math.sqrt((pos1.x - pos2.x) ** 2 + (pos1.y - pos2.y) ** 2);
+}
 
 onUpdate(() => {
     const allTanks = get("Tank");
@@ -170,12 +178,42 @@ onUpdate(() => {
     let avgY: number = 0;
 
     allTanks.map((tankObject: GameObj) => {
-        avgX += tankObject.pos.x
-        avgY += tankObject.pos.y
-    })
+        avgX += tankObject.pos.x;
+        avgY += tankObject.pos.y;
+    });
 
     avgX /= allTanks.length;
     avgY /= allTanks.length;
 
-    camPos(vec2(avgX, avgY))
-})
+    avgX = lerp(camPos().x, avgX, 0.25);
+    avgY = lerp(camPos().y, avgY, 0.25);
+
+    // Calculate the maximum distance between any two tanks
+    const padding = 1000
+
+    let maxDistance = 0;
+    for (let i = 0; i < allTanks.length; i++) {
+        for (let j = i + 1; j < allTanks.length; j++) {
+            const dist = distance(allTanks[i].pos, allTanks[j].pos) + padding;
+
+            if (dist > maxDistance) {
+                maxDistance = dist;
+            }
+        }
+    }
+
+    // Calculate the ratio based on the maximum distance
+    let ratio = (maxDistance > 0 ? 1 / (maxDistance / (height())) : 1)*1.5
+
+    if (ratio >= 1.5) {
+        ratio = 1.5
+    }
+
+    tween(camPos(), vec2(avgX, avgY), 0.35, (r) => { camPos(r.x, r.y) }, easings.easeOutQuad)
+    tween(camScale(), vec2(ratio, ratio), 0.35, (r) => { camScale(r.x, r.y) }, easings.easeOutQuad)
+});
+
+setInterval(() => {
+    const playerData = localTank.exportData();
+    socket.emit("send-player-data", playerData);
+}, 1000 / 20)

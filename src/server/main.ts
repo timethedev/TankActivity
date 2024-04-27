@@ -1,11 +1,12 @@
 import express from "express";
 import ViteExpress from "vite-express";
+
 import { Server } from "socket.io";
-import http from "http";
+
 import dotenv from "dotenv";
 import "node-fetch";
-
 import "kaboom/global";
+
 import { timeStamp } from "console";
 import { Socket } from "socket.io-client";
 import { SocketAddressInitOptions } from "net";
@@ -13,9 +14,14 @@ import { PlayerData } from "../data-structures/PlayerData";
 
 dotenv.config({ path: ".env" });
 const app = express();
-const server = http.createServer(app);
+
+const server = app.listen(3000, "0.0.0.0", () =>
+  console.log("Server is listening...")
+);
+
 const io = new Server(server, {
-  pingTimeout: 5000
+  wsEngine: require("eiows").Server,
+  /* transports: ['websocket'], */
 });
 
 // Allow express to parse JSON bodies
@@ -108,15 +114,18 @@ class Room {
       Rooms.push(this) // add the room to Rooms array
     }
 
+    let oldPlayerData = []
+
     //start infinite loop
     setInterval(() => {
       let PlayerData: PlayerData[] = []
 
       //parse all dta to PlayerData[]
       this.players.map((Player: Player) => PlayerData.push(Player.getData()))
-
+      oldPlayerData = PlayerData
+      
       io.to(this.channelId.toString()).emit("update-player-data", PlayerData)
-    }, 50)
+    }, 10)
   }
 
   // Retrieves a player from the room based on userId.
@@ -181,23 +190,10 @@ io.on('connection', (socket) => {
     console.log(`[${getTime()}] (${socket.id}): User has disconnected.`)
     
     if (room) {
-      console.log(userId)
       room.removePlayer(userId);
-      console.log(room)
     }
   });
 });
 
-server.listen(4000, () => { 
-  console.log('listening on *:4000');
-});
-
-// Listen for express on port 3000
 ViteExpress.bind(app, server);
-ViteExpress.listen(app, 3000, () =>
-  console.log("Server listening on port 3000..."),
-);
-
-
-
-
+ViteExpress.bind(app, io);
