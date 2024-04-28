@@ -11,6 +11,7 @@ import { timeStamp } from "console";
 import { Socket } from "socket.io-client";
 import { SocketAddressInitOptions } from "net";
 import { PlayerData } from "../data-structures/PlayerData";
+import Powerups from "../data-structures/Powerups";
 
 dotenv.config({ path: ".env" });
 const app = express();
@@ -85,6 +86,20 @@ class Player {
   }
 }
 
+const generateId = (): number => Math.floor(Math.random() * (2 ** 16));
+
+class Powerup {
+  name: string;
+  id: number | undefined;
+
+  constructor() {
+    let randomPowerup = Powerups[Math.floor(Math.random() * Powerups.length)] // generate a randomPowerup
+    
+    this.name = randomPowerup.name
+    this.id = generateId() //generate random id for the powerup, inorder to be able to classify this specific one in the future
+  }
+}
+
 let Rooms: Room[] = []
 
 // Represents a room in the game where players interact.
@@ -92,6 +107,7 @@ class Room {
   channelId: number;
   inProgress: boolean;
   players: Player[];
+  powerups: Powerup[];
 
   // Initializes a room with a given channelId and optionally adds a player.
   constructor (channelId: number, userId: number, socket: Socket | any) {
@@ -105,6 +121,7 @@ class Room {
       this.channelId = channelId; //setup a new room if not
       this.inProgress = false
       this.players = []
+      this.powerups = []
 
       this.addPlayer(userId, socket) //add user by default
 
@@ -122,7 +139,15 @@ class Room {
       oldPlayerData = PlayerData
       
       io.to(this.channelId.toString()).emit("update-player-data", PlayerData)
+      io.to(this.channelId.toString()).emit("update-powerups", this.powerups)
     }, 10)
+
+    setInterval(() => {
+      if (this.powerups.length < 3) {
+        const powerup = new Powerup()
+        this.powerups.push(powerup)
+      }
+    }, 5000)
   }
 
   // Retrieves a player from the room based on userId.
@@ -181,6 +206,10 @@ io.on('connection', (socket) => {
 
   socket.on("send-player-data", (playerData: Player) => {
     localPlayer?.updateData(playerData);
+  })
+
+  socket.on("shoot-projectile", (data) => {
+    if (room) io.to(room.channelId.toString()).emit("shoot-projectile", data)
   })
 
   socket.on('disconnect', () => {

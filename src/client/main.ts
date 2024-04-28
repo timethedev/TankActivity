@@ -12,6 +12,8 @@ import { Tank } from "./assets/objects/Tank";
 import { Projectile } from "./assets/projectiles/Projectile";
 import { PlayerData } from "../data-structures/PlayerData";
 import { Turret } from "./assets/objects/Turret";
+import { isForStatement } from "typescript";
+import { Powerup } from "./assets/objects/Powerup"
 
 
 // Interfaces
@@ -80,7 +82,6 @@ onUpdate("Tank", (tankController: GameObj) => { // Use Tank type
         up: isKeyDown('w') ? -1 : 0, down: isKeyDown('s') ? 1 : 0,
     }
     tankData.updateController(userInput);
-    debug.log(tankController.pos)
 });
 
 // Turret
@@ -106,7 +107,13 @@ onKeyPress("space", () => { // Shoot projectile
         const turretController: GameObj = turretData.controller;
 
         shake(10)
-        new Projectile (tankData, turretController.pos, turretData.angle, BLUE); // Spawn Projectile
+
+        new Projectile (tankData, turretController.pos, turretData.angle, BLUE);
+        socket.emit("shoot-projectile", {
+            userId: tankData.userId, 
+            pos: turretController.pos, 
+            angle: turretData.angle
+        })
     })
 });
 
@@ -212,6 +219,38 @@ socket.on("update-player-data", (allPlayerData: PlayerData[]) => {
         const playerData: PlayerData | undefined = allPlayerData.find((playerData) => playerController.data.userId == playerData.userId)
         if (!playerData) destroy(playerController);
     })
+})
+
+//Update Powerups
+socket.on("update-powerups", (PowerupsData: Powerup[]) => {
+    const allPowerups = get("Powerup")
+
+    PowerupsData.map((powerupData: Powerup) => {
+        const powerup: Powerup = allPowerups.find((powerup) => powerupData.id == powerup.data.id)?.data
+
+        if (!powerup) { //if powerup doesnt exist on map, add it
+            powerupData = new Powerup(powerupData.name, powerupData.id) //create new "Powerup" type locally. this way it will include functions
+        }
+    })
+
+    allPowerups.map((powerup) => {
+        const powerupData: Powerup | undefined = PowerupsData.find((powerupData: Powerup) => powerup.data.id == powerupData.id)
+        if (!powerupData) destroy(powerup)
+    })
+})
+
+//Handle Projectile Shot
+socket.on("shoot-projectile", (data) => {
+    const PlayerControllers = get("Tank");
+    
+    PlayerControllers.map((playerController: GameObj) => {
+        let Tank: Tank = playerController.data
+
+        if (Tank.userId == data.userId && data.userId != localClientUserId) {
+            shake(3)
+            new Projectile(Tank, vec2(data.pos.x, data.pos.y), data.angle, BLUE); // Spawn Projectile
+        }
+    });
 })
 
 // Send player data - Server
