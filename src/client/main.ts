@@ -1,13 +1,35 @@
-import kaboom, { GameObj, Vec2 } from "kaboom";
+// IMPORTS
+// kaboom Imports
+import kaboom, { Color, GameObj, Vec2 } from "kaboom";
 import "kaboom/global";
 
+// Server Imports
 import { io } from "socket.io-client";
 const socket = io({transports: ["websocket"] });
 
+// Class Imports
 import { Tank } from "./assets/objects/Tank";
 import { Projectile } from "./assets/projectiles/Projectile";
 import { PlayerData } from "../data-structures/PlayerData";
+import { Turret } from "./assets/objects/Turret";
 
+
+// Interfaces
+interface UserInput {
+    left: number,
+    right: number,
+    up: number,
+    down: number,
+}
+
+
+
+
+
+
+
+
+// kABOOM SETUP
 kaboom({
     width: 1920,
     height: 1080,
@@ -17,184 +39,108 @@ kaboom({
     logMax: 3,
 });
 
+// Mathematical Functions
+const RAD_TO_DEG: number = 180 / Math.PI;
+const DEG_TO_RAD: number = Math.PI / 180;
 
-// MATHEMATICAL FUNCTIONS
-// const RAD_TO_DEG = 180 / Math.PI;
-const DEG_TO_RAD = Math.PI / 180;
+function vectorToAngle(vector: Vec2): number {
+    return Math.atan2(vector.y, vector.x) * RAD_TO_DEG; // Assuming conversion to degrees
+}
 
-// function getAngleFromUnitVector(vector: Vec2): number {
-//     return Math.atan2(vector.y, vector.x) * RAD_TO_DEG; // Assuming conversion to degrees
-// }
-
-function getUnitVectorFromAngle(angleInDegrees: number): Vec2 {
-    const angleInRadians = angleInDegrees * DEG_TO_RAD; // Assuming conversion to radians
-    const x = Math.cos(angleInRadians);
-    const y = Math.sin(angleInRadians);
+function angleToVector(angleInDegrees: number): Vec2 {
+    const angleInRadians: number = angleInDegrees * DEG_TO_RAD; // Assuming conversion to radians
+    const x: number = Math.cos(angleInRadians);
+    const y: number = Math.sin(angleInRadians);
     return vec2(x, y);
 }
-
-
-// GAMEOBJECT BEHAVIOR
-onUpdate("Projectile", (projectile) => { // Use Projectile type
-    const projectileData = projectile.data;
-    const projectileSpeed = projectileData.speed;
-    const projectileAngle = projectileData.angle;
-    const unitVector = getUnitVectorFromAngle(projectileAngle);
-    projectile.pos = projectile.pos.add(unitVector.scale(projectileSpeed));
-    projectile.angle = projectileAngle;
-});
-
-onUpdate("Tank", (tank) => { // Use Tank type
-    if (!tank.is("LocalPlayer")) return;
-
-    const tankData = tank.data;
-  
-    const leftInput = isKeyDown('a') ? -1 : 0;
-    const rightInput = isKeyDown('d') ? 1 : 0;
-    const upInput = isKeyDown('w') ? -1 : 0;
-    const downInput = isKeyDown('s') ? 1 : 0;
-
-    const turnInput = leftInput + rightInput;
-    const moveInput = upInput + downInput;
-
-    const acceleration = 4;
-    const deacceleration = 3;
-    const maxSpeed = 5;
-    const turnSpeed = 180;
-
-    tankData.speed += moveInput * acceleration * dt();
-    tankData.speed -= moveInput !== 0 ? 0 : Math.sign(tankData.speed) * deacceleration * dt();
-    tankData.speed = Math.min(Math.max(tankData.speed, -maxSpeed), maxSpeed);
-
-    if (moveInput !== 0) {
-        tankData.angle += -Math.sign(moveInput * 10 + 1) * turnInput * turnSpeed * dt();
-    } else {
-        tankData.angle += turnInput * turnSpeed * dt();
-    }
-
-    const speed = tankData.speed;
-    const angle = tankData.angle;
-    const velocity = vec2(speed * Math.cos(angle * DEG_TO_RAD), speed * Math.sin(angle * DEG_TO_RAD));
-
-    tank.pos = tank.pos.add(velocity);
-    tank.angle = tankData.angle;
-
-    if (speed || angle) {
-        const playerData = localTank.exportData();
-        socket.emit("send-player-data", playerData);
-    }
-});
-
-onUpdate("Turret", (turret) =>{
-    if (!turret.is("LocalPlayer")) return;
-
-    const turretData = turret.data;
-    turret.pos = turretData.tank.pos; // Assuming attachment to tank
-
-    const angularVelocity = 1;
-    const currentAngle = turretData.angle;
-
-    const rotations = Math.floor(currentAngle / 360);
-    const desiredAngle = turret.pos.angle(mousePos()) + (rotations + 1) * 360;
-
-    const angularDistanceLeft = (desiredAngle - currentAngle + 360) % 360;
-    const angularDistanceRight = 360 - angularDistanceLeft;
-    const angularDirection = (angularDistanceLeft > angularDistanceRight) ? 1 : -1;
-
-    turretData.angle += 100 * angularVelocity * angularDirection * dt()
-    turret.angle = turretData.angle;
-})
-
-
-// USER INPUT
-onKeyPress("space", () => {
-    for (const tank of get("Tank")) {
-        const tankData = tank.data;
-        const turret = tankData.turret;
-        const turretData = turret.data;
-        new Projectile(tankData, turret.pos, turretData.angle, BLUE); // Use Projectile
-    }
-});
-
-const generateUserId = (): number => Math.floor(Math.random() * (2 ** 16))
-
-const userId = generateUserId()
-
-// TEST SECTION
-const Red = rgb(255, 0, 62);
-const Blue = rgb(62, 0, 255);
-const localTank: Tank = new Tank(Red, "LocalPlayer", userId);
-
-class Player {
-    constructor (id: string | undefined) {
-        this.id = id;
-    }
-    id: string | undefined;
-}
-
-//Join Room
-socket.emit("join-room", {
-    userId: userId
-});
 
 function Lerp(start: number, end: number, t: number) {
     return start * (1 - t) + end * t;
 }
 
-//Update Player Data Every Second
-socket.on("update-player-data", (PlayerData: PlayerData[]) => {
-    /* debug.log(Date.now()) */
-
-    const allTanks = get("Tank");
-
-    PlayerData.map((Player) => {
-        const userIdString: string | undefined = Player.userId?.toString();
-
-        if (userIdString) {
-            let tank: Tank = allTanks.find((tankObject) => Player.userId == tankObject.data.userId)?.data || new Tank(Red, `Player_${Player.userId}`, Player.userId);
-
-            if (Player.userId != localTank.userId) {
-                tween(tank.tankModel.pos, vec2(Player.position.x, Player.position.y), .15, (p) => tank.tankModel.pos = p, easings.linear)
-                tank.tankModel.angle = Player.angle
-            }
-        }
-    })
-
-    //remove tank if player has left
-    allTanks.map((tankObject) => {
-        const player = PlayerData.find((player) => tankObject.data.userId == player.userId)
-        if (!player) destroy(tankObject)
-    })
-})
-
 function distance(pos1: Vec2, pos2: Vec2): number {
     return Math.sqrt((pos1.x - pos2.x) ** 2 + (pos1.y - pos2.y) ** 2);
 }
 
-onUpdate(() => {
-    const allTanks = get("Tank");
 
-    let avgX: number = 0;
-    let avgY: number = 0;
 
-    allTanks.map((tankObject: GameObj) => {
-        avgX += tankObject.pos.x;
-        avgY += tankObject.pos.y;
+
+
+
+
+
+
+// GAMEOBJECT BEHAVIOUR
+// Tank
+onUpdate("Tank", (tankController: GameObj) => { // Use Tank type
+    if (!tankController.is("LocalClient")) return;
+    const tankData: Tank = tankController.data;
+    const userInput: UserInput = {
+        left: isKeyDown('a') ? -1 : 0, right: isKeyDown('d') ? 1 : 0,
+        up: isKeyDown('w') ? -1 : 0, down: isKeyDown('s') ? 1 : 0,
+    }
+    tankData.updateController(userInput);
+    debug.log(tankController.pos)
+});
+
+// Turret
+onUpdate("Turret", (turretController: GameObj) =>{
+    if (!turretController.is("LocalClient")) return;
+    const turretData: Turret = turretController.data;
+
+    turretData.updateController(mousePos());
+})
+
+// Projectile
+onUpdate("Projectile", (projectileController: GameObj) => { // Use Projectile type
+    const projectileData: Projectile = projectileController.data;
+    projectileData.updateController();
+});
+
+onKeyPress("space", () => { // Shoot projectile
+    get("Tank").map((tankController) =>{
+        if (!tankController.is("LocalClient")) return;
+
+        const tankData: Tank = tankController.data;
+        const turretData: Turret = tankData.turretData;
+        const turretController: GameObj = turretData.controller;
+
+        shake(10)
+        new Projectile (tankData, turretController.pos, turretData.angle, BLUE); // Spawn Projectile
+    })
+});
+
+
+
+
+
+
+
+// CAMERA MANAGING
+onUpdate(() => { // Control Camera Dynamic Zoom Effect
+    const PlayerControllers = get("Tank");
+
+    let averageX: number = 0;
+    let averageY: number = 0;
+
+    PlayerControllers.map((playerController: GameObj) => {
+        averageX += playerController.pos.x;
+        averageY += playerController.pos.y;
     });
 
-    avgX /= allTanks.length;
-    avgY /= allTanks.length;
+    averageX /= PlayerControllers.length;
+    averageY /= PlayerControllers.length;
 
-    avgX = lerp(camPos().x, avgX, 0.25);
-    avgY = lerp(camPos().y, avgY, 0.25);
+    averageX = lerp(camPos().x, averageX, 0.25);
+    averageY = lerp(camPos().y, averageY, 0.25);
 
     // Calculate the maximum distance between any two tanks
     const padding = 1000
 
     let maxDistance = 0;
-    for (let i = 0; i < allTanks.length; i++) {
-        for (let j = i + 1; j < allTanks.length; j++) {
-            const dist = distance(allTanks[i].pos, allTanks[j].pos) + padding;
+    for (let i = 0; i < PlayerControllers.length; i++) {
+        for (let j = i + 1; j < PlayerControllers.length; j++) {
+            const dist = distance(PlayerControllers[i].pos, PlayerControllers[j].pos) + padding;
 
             if (dist > maxDistance) {
                 maxDistance = dist;
@@ -209,11 +155,67 @@ onUpdate(() => {
         ratio = 1.5
     }
 
-    tween(camPos(), vec2(avgX, avgY), 0.35, (r) => { camPos(r.x, r.y) }, easings.easeOutQuad)
+    tween(camPos(), vec2(averageX, averageY), 0.35, (r) => { camPos(r.x, r.y) }, easings.easeOutQuad)
     tween(camScale(), vec2(ratio, ratio), 0.35, (r) => { camScale(r.x, r.y) }, easings.easeOutQuad)
 });
 
+
+
+
+
+
+add([rect(100,100), pos(width()/2, height()/2)])
+
+
+// localClient-SIDE SERVER MANAGEMENT
+const generateUserId = (): number => Math.floor(Math.random() * (2 ** 16));
+const localClientUserId: number = generateUserId();
+
+// Simple Constant Data
+const Red: Color = rgb(255, 0, 62);
+const Blue: Color = rgb(62, 0, 255);
+
+// LocalClient Tank Creation
+const localClientTank: Tank = new Tank(Red, "LocalClient", localClientUserId);
+
+class Player {
+    constructor (id: string | undefined) {
+        this.id = id;
+    }
+    id: string | undefined;
+}
+
+//Join Room - Server
+socket.emit("join-room", {
+    userId: localClientUserId,
+});
+
+//Update Player Controller Data Every Second
+socket.on("update-player-data", (allPlayerData: PlayerData[]) => {
+    const PlayerControllers = get("Tank");
+
+    allPlayerData.map((playerData) => {
+        const playerUserId: string | undefined = playerData.userId?.toString();
+
+        if (playerUserId) {
+            let tankData: Tank = PlayerControllers.find((playerController) => playerData.userId == playerController.data.userId)?.data || new Tank(Red, `Player_${playerData.userId}`, playerData.userId);
+
+            if (playerData.userId != localClientTank.userId) {
+                tween(tankData.controller.pos, vec2(playerData.position.x, playerData.position.y), .15, (p) => tankData.controller.pos = p, easings.linear)
+                tankData.controller.angle = playerData.angle
+            }
+        }
+    })
+
+    // Remove tank controller if player has left
+    PlayerControllers.map((playerController) => {
+        const playerData: PlayerData | undefined = allPlayerData.find((playerData) => playerController.data.userId == playerData.userId)
+        if (!playerData) destroy(playerController);
+    })
+})
+
+// Send player data - Server
 setInterval(() => {
-    const playerData = localTank.exportData();
+    const playerData = localClientTank.exportData();
     socket.emit("send-player-data", playerData);
 }, 1000 / 20)

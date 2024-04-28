@@ -19,10 +19,7 @@ const server = app.listen(3000, "0.0.0.0", () =>
   console.log("Server is listening...")
 );
 
-const io = new Server(server, {
-  wsEngine: require("eiows").Server,
-  /* transports: ['websocket'], */
-});
+const io = new Server(server);
 
 // Allow express to parse JSON bodies
 app.use(express.json());
