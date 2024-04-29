@@ -28,6 +28,7 @@ class Projectile {
             rect(20, 20),
             color(colour),
             anchor("center"),
+            area(),
             rotate(angle),
             pos(originPosition),
             offscreen({ destroy: true }),

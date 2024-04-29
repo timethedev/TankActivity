@@ -180,6 +180,14 @@ class Room {
     }
   }
 
+  removePowerup(powerup: Powerup) {
+    const powerupIndex: number = this.powerups.findIndex((sPowerup) => sPowerup.id == powerup.id)
+
+    if (powerupIndex > -1) {
+      this.powerups.splice(powerupIndex, 1)
+    }
+  }
+
   // Marks the start of a round in the room.
   startRound() {
     this.inProgress = true;
@@ -210,6 +218,23 @@ io.on('connection', (socket) => {
 
   socket.on("shoot-projectile", (data) => {
     if (room) io.to(room.channelId.toString()).emit("shoot-projectile", data)
+  })
+
+  socket.on("kill-tank", (data) => {
+    if (room) {
+      let reciever = room.getPlayer(data.recieverUserId)
+
+      if (reciever) {
+        reciever.socket.disconnect();
+      }
+    }
+  })
+
+  socket.on("upgrade-powerup", (data) => {
+    if (room) {
+      const powerup: Powerup = data.powerup
+      room.removePowerup(powerup)
+    }
   })
 
   socket.on('disconnect', () => {

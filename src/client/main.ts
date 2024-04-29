@@ -253,6 +253,32 @@ socket.on("shoot-projectile", (data) => {
     });
 })
 
+//when bullet collides with tank
+onCollide("Tank", "Projectile", (tankObj: GameObj, projectileObj: GameObj) => {
+    const tank: Tank = tankObj.data
+    const projectile: Projectile = projectileObj.data
+
+    if (localClientUserId == projectile.tank.userId && localClientUserId != tank.userId) {
+        socket.emit("kill-tank", {
+            senderUserId: projectile.tank.userId,
+            recieverUserId: tank.userId
+        })
+    }
+})
+
+//when tank collied with powerup
+onCollide("Tank", "Powerup", (tankObj: GameObj, powerupObj: GameObj) => {
+    const tank: Tank = tankObj.data
+    const powerup: Powerup = powerupObj.data
+    console.log(tank.userId, localClientUserId)
+    
+    if (tank.userId == localClientUserId) {
+        socket.emit("upgrade-powerup", {
+            powerup: powerup
+        })
+    }
+})
+
 // Send player data - Server
 setInterval(() => {
     const playerData = localClientTank.exportData();

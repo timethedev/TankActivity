@@ -18,6 +18,7 @@ export class Powerup {
       `${this.name}_${this.id}`, //BANANA_12345
       anchor("center"),
       rect(25, 25),
+      area(),
       pos(Math.random()*(width()/2), Math.random()*(height()/2)),
       color(YELLOW),
       {
