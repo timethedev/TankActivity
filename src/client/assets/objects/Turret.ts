@@ -7,9 +7,10 @@ class Turret {
     constructor (tank: Tank, userTag: string) {
         this.tank = tank;
         this.controller = add([
-            rect(30, 10),
+            sprite("RedTurret"),
             anchor("left"),
             pos(center()),
+            scale(0.8),
             z(1),
             "Turret",
             userTag,
@@ -17,21 +18,34 @@ class Turret {
                 data: this,
             },
         ]);
+        this.controllerOutline = add([
+            sprite("RedTurretOutline"),
+            anchor("left"),
+            pos(center()),
+            scale(0.8),
+            z(-1),
+            "TurretOutline",
+            userTag,
+        ]);
     }
+
     tank: Tank;
     speed: number = 0;
     angle: number = 0;
     controller: GameObj;
+    controllerOutline: GameObj;
 
     updateController (targetPosition: Vec2) {
         // Position
         const turretData: Turret = this;
         const turretController: GameObj = turretData.controller;
+        const turretControllerOutline: GameObj = turretData.controllerOutline;
 
         const tankData: Tank = turretData.tank;
         const tankController: GameObj = tankData.controller;
 
         turretController.pos = tankController.pos; // Assuming attachment to tank controller
+        turretControllerOutline.pos = turretController.pos;
 
         // Rotation
         const angularVelocity = 1;
@@ -46,6 +60,7 @@ class Turret {
 
         turretData.angle += 100 * angularVelocity * angularDirection * dt()
         turretController.angle = turretData.angle;
+        turretControllerOutline.angle = turretData.angle;
     }
 }
 

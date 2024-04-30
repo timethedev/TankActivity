@@ -1,5 +1,4 @@
 // IMPORTS
-// kaboom Imports
 import kaboom, { Color, GameObj, Vec2 } from "kaboom";
 import "kaboom/global";
 
@@ -9,11 +8,11 @@ const socket = io({transports: ["websocket"] });
 
 // Class Imports
 import { Tank } from "./assets/objects/Tank";
-import { Projectile } from "./assets/projectiles/Projectile";
+import { Projectile, FireProjectile, IceProjectile } from "./assets/projectiles/Projectile";
 import { PlayerData } from "../data-structures/PlayerData";
 import { Turret } from "./assets/objects/Turret";
-import { isForStatement } from "typescript";
 import { Powerup } from "./assets/objects/Powerup"
+
 
 
 // Interfaces
@@ -26,7 +25,12 @@ interface UserInput {
 
 
 
-
+// Constants
+const stringToBullet: any = {
+    "Projectile": Projectile,
+    "FireProjectile": FireProjectile,
+    "IceProjectile": IceProjectile
+};
 
 
 
@@ -40,6 +44,15 @@ kaboom({
     logTime: 3,
     logMax: 3,
 });
+
+loadSprite("Bullet", "src\\client\\assets\\sprites\\Bullet.png")
+
+loadSprite("RedTank", "src\\client\\assets\\sprites\\Red\\Tank.png")
+loadSprite("RedTurret", "src\\client\\assets\\sprites\\Red\\Turret.png")
+loadSprite("RedTurretOutline", "src\\client\\assets\\sprites\\Red\\TurretOutline.png")
+
+
+
 
 // Mathematical Functions
 const RAD_TO_DEG: number = 180 / Math.PI;
@@ -99,22 +112,7 @@ onUpdate("Projectile", (projectileController: GameObj) => { // Use Projectile ty
 });
 
 onKeyPress("space", () => { // Shoot projectile
-    get("Tank").map((tankController) =>{
-        if (!tankController.is("LocalClient")) return;
-
-        const tankData: Tank = tankController.data;
-        const turretData: Turret = tankData.turretData;
-        const turretController: GameObj = turretData.controller;
-
-        shake(10)
-
-        new Projectile (tankData, turretController.pos, turretData.angle, BLUE);
-        socket.emit("shoot-projectile", {
-            userId: tankData.userId, 
-            pos: turretController.pos, 
-            angle: turretData.angle
-        })
-    })
+    localClientTank.shoot(socket);
 });
 
 
@@ -183,7 +181,7 @@ const Red: Color = rgb(255, 0, 62);
 const Blue: Color = rgb(62, 0, 255);
 
 // LocalClient Tank Creation
-const localClientTank: Tank = new Tank(Red, "LocalClient", localClientUserId);
+const localClientTank: Tank = new Tank("LocalClient", localClientUserId);
 
 class Player {
     constructor (id: string | undefined) {
@@ -205,7 +203,7 @@ socket.on("update-player-data", (allPlayerData: PlayerData[]) => {
         const playerUserId: string | undefined = playerData.userId?.toString();
 
         if (playerUserId) {
-            let tankData: Tank = PlayerControllers.find((playerController) => playerData.userId == playerController.data.userId)?.data || new Tank(Red, `Player_${playerData.userId}`, playerData.userId);
+            let tankData: Tank = PlayerControllers.find((playerController) => playerData.userId == playerController.data.userId)?.data || new Tank(`Player_${playerData.userId}`, playerData.userId);
 
             if (playerData.userId != localClientTank.userId) {
                 tween(tankData.controller.pos, vec2(playerData.position.x, playerData.position.y), .15, (p) => tankData.controller.pos = p, easings.linear)
@@ -248,7 +246,7 @@ socket.on("shoot-projectile", (data) => {
 
         if (Tank.userId == data.userId && data.userId != localClientUserId) {
             shake(3)
-            new Projectile(Tank, vec2(data.pos.x, data.pos.y), data.angle, BLUE); // Spawn Projectile
+            Tank.shoot(socket);
         }
     });
 })
@@ -259,10 +257,7 @@ onCollide("Tank", "Projectile", (tankObj: GameObj, projectileObj: GameObj) => {
     const projectile: Projectile = projectileObj.data
 
     if (localClientUserId == projectile.tank.userId && localClientUserId != tank.userId) {
-        socket.emit("kill-tank", {
-            senderUserId: projectile.tank.userId,
-            recieverUserId: tank.userId
-        })
+        tank.kill(socket, projectile.tank)
     }
 })
 

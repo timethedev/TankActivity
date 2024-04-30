@@ -1,7 +1,18 @@
-import { Color, GameObj } from "kaboom";
+import kaboom, { Color, GameObj } from "kaboom";
 import "kaboom/global";
 
 import { Turret } from "./Turret";
+import { Projectile, FireProjectile, IceProjectile } from "../projectiles/Projectile";
+import { Socket } from "socket.io-client";
+
+// Constants
+const stringToBullet: any = {
+    "Projectile": Projectile,
+    "FireProjectile": FireProjectile,
+    "IceProjectile": IceProjectile
+};
+
+
 
 const RAD_TO_DEG = 180 / Math.PI;
 const DEG_TO_RAD = Math.PI / 180;
@@ -14,13 +25,13 @@ interface UserInput {
 }
 
 class Tank {
-    constructor (colour: Color, userTag: string, userId: number | undefined) {
+    constructor (userTag: string, userId: number | undefined) {
         this.controller = add([
-            rect(60, 50),
-            color(colour),
+            sprite("RedTank"),
             anchor("center"),
             pos(width()/2, height()/2),
             area(),
+            scale(0.8),
             z(0),
             "Tank",
             userTag,
@@ -31,8 +42,10 @@ class Tank {
         this.turretData = new Turret(this, userTag);
         this.userId = userId;
     }
+    
     controller: GameObj;
     turretData: Turret;
+    bullet: string = "FireProjectile";
     userId: number | undefined;
     speed: number = 0;
     angle: number = 0;
@@ -74,6 +87,32 @@ class Tank {
 
         tankController.pos = tankController.pos.add(velocity);
         tankController.angle = tankData.angle;
+    }
+
+    shoot (socket: Socket<any>) {
+        const tankData: Tank = this;
+        const turretData: Turret = tankData.turretData;
+        const turretController: GameObj = turretData.controller;
+        const bullet = stringToBullet[tankData.bullet];
+
+        shake(10)
+        new bullet (tankData, turretController.pos, turretData.angle);
+
+        socket.emit("shoot-projectile", {
+            userId: tankData.userId, 
+            pos: turretController.pos, 
+            angle: turretData.angle,
+            bullet: tankData.bullet
+        })
+    }
+
+    kill (socket: Socket<any>, killerTank: Tank) {
+        const tank: Tank = this;
+
+        socket.emit("kill-tank", {
+            senderUserId: killerTank.userId,
+            recieverUserId: tank.userId
+        })
     }
 }
 

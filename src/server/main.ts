@@ -7,9 +7,7 @@ import dotenv from "dotenv";
 import "node-fetch";
 import "kaboom/global";
 
-import { timeStamp } from "console";
 import { Socket } from "socket.io-client";
-import { SocketAddressInitOptions } from "net";
 import { PlayerData } from "../data-structures/PlayerData";
 import Powerups from "../data-structures/Powerups";
 
