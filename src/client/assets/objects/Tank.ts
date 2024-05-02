@@ -45,7 +45,7 @@ class Tank {
     
     controller: GameObj;
     turretData: Turret;
-    bullet: string = "FireProjectile";
+    bullet: string = "Projectile";
     userId: number | undefined;
     speed: number = 0;
     angle: number = 0;
@@ -56,6 +56,7 @@ class Tank {
             position: tankController.pos,
             angle: tankData.angle,
             userId: tankData.userId,
+            mousePos: mousePos()
         }
     }
 

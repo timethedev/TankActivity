@@ -12,6 +12,7 @@ import { Projectile, FireProjectile, IceProjectile } from "./assets/projectiles/
 import { PlayerData } from "../data-structures/PlayerData";
 import { Turret } from "./assets/objects/Turret";
 import { Powerup } from "./assets/objects/Powerup"
+import Maps from "../common/Maps";
 
 
 
@@ -51,7 +52,13 @@ loadSprite("RedTank", "src\\client\\assets\\sprites\\Red\\Tank.png")
 loadSprite("RedTurret", "src\\client\\assets\\sprites\\Red\\Turret.png")
 loadSprite("RedTurretOutline", "src\\client\\assets\\sprites\\Red\\TurretOutline.png")
 
+loadSprite("PowerupOrb", "src/client/assets/sprites/PowerupOrb.png")
 
+loadSprite("Collisions", "src\\client\\assets\\sprites\\Map-test\\collisions.png")
+loadSprite("Sea", "src/client/assets/sprites/Sea.png")
+
+
+/* debug.inspect = true */
 
 
 // Mathematical Functions
@@ -102,7 +109,7 @@ onUpdate("Turret", (turretController: GameObj) =>{
     if (!turretController.is("LocalClient")) return;
     const turretData: Turret = turretController.data;
 
-    turretData.updateController(mousePos());
+    turretData.updateController();
 })
 
 // Projectile
@@ -116,10 +123,30 @@ onKeyPress("space", () => { // Shoot projectile
 });
 
 
+const CAM = true
+let allPolygons: Vec2[] = []
 
+if (!CAM) {
+    onClick(() => {
+        const mP = toWorld(mousePos())
+        allPolygons.push(mP)
 
+        debug.log("")
+        debug.log("Added Polygon")
+        debug.log(mP)
+    })
+    onKeyPress("enter", () => {
+        downloadJSON("polygons.json", allPolygons)
+    })
+}
 
+let map = Maps[0]
+let mapPolygon = {
+    adjusted: map.polygon.map((point) => {return vec2(Math.ceil((point.x-(width()/2))/1.5), Math.ceil((point.y-(height()/2))/1.5))}),
+    unadjusted: map.polygon.map((point) => { return vec2(Math.ceil(point.x), Math.ceil(point.y))})
+}
 
+loadSprite("Ground", map.img)
 
 // CAMERA MANAGING
 onUpdate(() => { // Control Camera Dynamic Zoom Effect
@@ -161,15 +188,13 @@ onUpdate(() => { // Control Camera Dynamic Zoom Effect
     }
 
     tween(camPos(), vec2(averageX, averageY), 0.35, (r) => { camPos(r.x, r.y) }, easings.easeOutQuad)
-    tween(camScale(), vec2(ratio, ratio), 0.35, (r) => { camScale(r.x, r.y) }, easings.easeOutQuad)
+    if(CAM) tween(camScale(), vec2(ratio, ratio), 0.35, (r) => { camScale(r.x, r.y) }, easings.easeOutQuad)
 });
 
 
 
 
 
-
-add([rect(100,100), pos(width()/2, height()/2)])
 
 
 // localClient-SIDE SERVER MANAGEMENT
@@ -208,6 +233,9 @@ socket.on("update-player-data", (allPlayerData: PlayerData[]) => {
             if (playerData.userId != localClientTank.userId) {
                 tween(tankData.controller.pos, vec2(playerData.position.x, playerData.position.y), .15, (p) => tankData.controller.pos = p, easings.linear)
                 tankData.controller.angle = playerData.angle
+
+                const turretData: Turret = tankData.turretData
+                turretData.updateController(playerData.mousePos, vec2(playerData.position.x, playerData.position.y));
             }
         }
     })
@@ -215,7 +243,11 @@ socket.on("update-player-data", (allPlayerData: PlayerData[]) => {
     // Remove tank controller if player has left
     PlayerControllers.map((playerController) => {
         const playerData: PlayerData | undefined = allPlayerData.find((playerData) => playerController.data.userId == playerData.userId)
-        if (!playerData) destroy(playerController);
+        if (!playerData) {
+            destroy(playerController.data?.turretData.controller)
+            destroy(playerController.data?.turretData.controllerOutline)
+            destroy(playerController)
+        };
     })
 })
 
@@ -227,7 +259,7 @@ socket.on("update-powerups", (PowerupsData: Powerup[]) => {
         const powerup: Powerup = allPowerups.find((powerup) => powerupData.id == powerup.data.id)?.data
 
         if (!powerup) { //if powerup doesnt exist on map, add it
-            powerupData = new Powerup(powerupData.name, powerupData.id) //create new "Powerup" type locally. this way it will include functions
+            powerupData = new Powerup(powerupData.name, powerupData.pos,powerupData.id) //create new "Powerup" type locally. this way it will include functions
         }
     })
 
@@ -246,9 +278,13 @@ socket.on("shoot-projectile", (data) => {
 
         if (Tank.userId == data.userId && data.userId != localClientUserId) {
             shake(3)
-            Tank.shoot(socket);
+            new stringToBullet[Tank.bullet] (Tank, playerController.pos, Tank.turretData.angle);
         }
     });
+})
+
+socket.on("collect-powerup", (data) => {
+    console.log("collected ", data.powerup)
 })
 
 //when bullet collides with tank
@@ -268,11 +304,95 @@ onCollide("Tank", "Powerup", (tankObj: GameObj, powerupObj: GameObj) => {
     console.log(tank.userId, localClientUserId)
     
     if (tank.userId == localClientUserId) {
-        socket.emit("upgrade-powerup", {
+        socket.emit("collect-powerup", {
             powerup: powerup
         })
     }
 })
+
+function rayCasting(point: any, polygon: any) {
+    const n = polygon.length
+    let isIn = false
+    const x = point[0]
+    const y = point[1]
+    let x1, x2, y1, y2
+
+    x1 = polygon[n-1][0]
+    y1 = polygon[n-1][1]
+
+    for (let i = 0; i < n; ++i) {
+        x2 = polygon[i][0];
+        y2 = polygon[i][1];
+
+        if (y < y1 !== y < y2 && x < (x2 - x1) * (y - y1) / (y2 - y1) + x1) {
+            isIn = !isIn;
+        }
+        x1 = x2
+        y1 = y2
+    }
+
+    return isIn;
+}
+
+let dead = false
+
+onUpdate("Tank", (tankObj: GameObj) => {
+    const tankData: Tank = tankObj.data;
+
+    const point = [Math.ceil(localClientTank.controller.pos.x), Math.ceil(localClientTank.controller.pos.y)]
+    const polygon = mapPolygon.unadjusted.map((p => { return [p.x, p.y ]}));
+    const insidePolygon = rayCasting(point, polygon)
+
+    if (!insidePolygon && !dead && tankData.userId == localClientUserId) {
+        dead = true
+
+        debug.log("I died!")
+        
+        socket.emit("kill-tank", {
+            senderUserId: tankData.userId,
+            recieverUserId: tankData.userId
+        })
+    } 
+})
+
+add([
+    sprite("Ground"),
+    "Ground",
+    anchor("center"),
+    scale(1.5),
+    pos(width()/2, height()/2),
+    z(-5),
+    area({ shape: new Polygon(mapPolygon.adjusted) })
+])
+
+
+// const MapShape = get("Ground")[0]
+// onUpdate("Tank", (tankController) =>{
+//     if (!MapShape.contains(tankController.pos)) {
+//         const tankData: Tank = tankController.data;
+        
+//         
+//     }
+// })
+
+
+/* add([
+    sprite("Collisions"),
+    anchor("center"),
+    area(),
+    body(),
+    scale(1.5),
+    pos(width()/2, height()/2),
+    z(5)
+])
+ */
+add([
+    sprite("Sea"),
+    anchor("center"),
+    scale(2),
+    pos(width()/2, height()/2),
+    z(-10)
+])
 
 // Send player data - Server
 setInterval(() => {

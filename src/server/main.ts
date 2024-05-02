@@ -10,6 +10,8 @@ import "kaboom/global";
 import { Socket } from "socket.io-client";
 import { PlayerData } from "../data-structures/PlayerData";
 import Powerups from "../data-structures/Powerups";
+import { randomPositionInsidePolygon } from "../common/Polygon";
+import Maps from "../common/Maps";
 
 dotenv.config({ path: ".env" });
 const app = express();
@@ -22,6 +24,8 @@ const io = new Server(server);
 
 // Allow express to parse JSON bodies
 app.use(express.json());
+
+app.use(express.static('public'))
 
 app.post("/api/token", async (req, res) => {
     // Exchange the code for an access_token
@@ -60,6 +64,8 @@ class Player {
   alive: boolean;
   userId: number | undefined;
   socket: Socket;
+  powerup: Powerup;
+  mousePos: Vec2;
 
   // Initializes a player with a given userId.
   constructor (userId: number, socket: Socket) {
@@ -68,10 +74,19 @@ class Player {
     this.socket = socket;
   }
 
+  changePowerup(powerup: Powerup) {
+    this.powerup = powerup;
+    
+    this.socket?.emit("collect-powerup", {
+      powerup: powerup
+    })
+  }
+
   // Updates the player's data with new information.
   updateData(playerData: Player) {
     this.position = playerData.position;
     this.angle = playerData.angle;
+    this.mousePos = playerData.mousePos;
   }
 
   getData() {
@@ -79,7 +94,8 @@ class Player {
       position: this.position,
       angle: this.angle,
       alive: this.alive,
-      userId: this.userId
+      userId: this.userId,
+      mousePos: this.mousePos
     }
   }
 }
@@ -88,12 +104,20 @@ const generateId = (): number => Math.floor(Math.random() * (2 ** 16));
 
 class Powerup {
   name: string;
+  pos: Vec2;
   id: number | undefined;
 
   constructor() {
     let randomPowerup = Powerups[Math.floor(Math.random() * Powerups.length)] // generate a randomPowerup
-    
+    let randomPos = randomPositionInsidePolygon(Maps[0].polygon.map((p) => { return [p.x, p.y] }))
+
     this.name = randomPowerup.name
+    if (randomPos) {
+      this.pos = {
+        x: randomPos[0], 
+        y: randomPos[1]
+      }
+    }
     this.id = generateId() //generate random id for the powerup, inorder to be able to classify this specific one in the future
   }
 }
@@ -228,10 +252,16 @@ io.on('connection', (socket) => {
     }
   })
 
-  socket.on("upgrade-powerup", (data) => {
+  socket.on("collect-powerup", (data) => {
     if (room) {
-      const powerup: Powerup = data.powerup
-      room.removePowerup(powerup)
+      const player = room.getPlayer(userId)
+
+      if (player) {
+        const powerup: Powerup = data.powerup
+        
+        player.changePowerup(powerup)
+        room.removePowerup(powerup)
+      }
     }
   })
 

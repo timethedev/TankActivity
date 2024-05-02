@@ -7,6 +7,7 @@ export interface PlayerData {
   bulletType: Projectile;
   alive: boolean;
   userId: number | undefined;
+  mousePos: Vec2;
 }
 
 

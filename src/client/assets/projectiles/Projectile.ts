@@ -40,6 +40,8 @@ class Projectile {
                 data: this,
             },
         ])
+
+        wait(5, () => destroy(this.controller))
     }
 
     tank: Tank;
@@ -52,7 +54,7 @@ class Projectile {
         const projectileController: GameObj = projectileData.controller;
         const directionVector: Vec2 = angleToVector(projectileData.angle);
 
-        projectileController.pos = projectileController.pos.add(directionVector.scale(projectileData.speed));
+        projectileController.pos = projectileController.pos.add(directionVector.scale(projectileData.speed * dt() * 50));
         projectileController.angle = projectileData.angle;
     }
 }
@@ -63,7 +65,7 @@ class IceProjectile extends Projectile {
         const projectileController: GameObj = projectileData.controller;
         const directionVector: Vec2 = angleToVector(projectileData.angle);
 
-        projectileController.pos = projectileController.pos.add(directionVector.scale(projectileData.speed));
+        projectileController.pos = projectileController.pos.add(directionVector.scale(projectileData.speed * dt() * 50));
         projectileController.angle = projectileData.angle;
 
         
@@ -74,9 +76,11 @@ class FireProjectile extends Projectile {
     constructor (tank: Tank, originPosition: Vec2, angle: number) {
         super(tank, originPosition, angle)
         this.controller.wait(0.2, () =>{
-            loop(0.5, () =>{
-                new Fire (this, this.controller.pos);
+            let l = loop(0.2, () =>{
+                if (this.controller) new Fire (this, this.controller.pos);
             })
+
+            this.controller.onDestroy(() => l.cancel())
         })
     }
 }

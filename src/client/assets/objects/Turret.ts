@@ -8,19 +8,19 @@ class Turret {
         this.tank = tank;
         this.controller = add([
             sprite("RedTurret"),
-            anchor("left"),
+            anchor("right"),
             pos(center()),
             scale(0.8),
+            area({ shape: new Rect(vec2(), 10, 10) }),
             z(1),
             "Turret",
+            "TankCenter",
             userTag,
-            {
-                data: this,
-            },
+            { data: this },
         ]);
         this.controllerOutline = add([
             sprite("RedTurretOutline"),
-            anchor("left"),
+            anchor("right"),
             pos(center()),
             scale(0.8),
             z(-1),
@@ -35,20 +35,35 @@ class Turret {
     controller: GameObj;
     controllerOutline: GameObj;
 
-    updateController (targetPosition: Vec2) {
+    updateController (targetPosition?: Vec2, tankPos?: Vec2) {
         // Position
         const turretData: Turret = this;
         const turretController: GameObj = turretData.controller;
         const turretControllerOutline: GameObj = turretData.controllerOutline;
 
-        const tankData: Tank = turretData.tank;
+        const tankData: Tank = this.tank;
         const tankController: GameObj = tankData.controller;
 
-        turretController.pos = tankController.pos; // Assuming attachment to tank controller
-        turretControllerOutline.pos = turretController.pos;
+        if (tankPos) {
+            tween(turretController.pos, tankPos, .15, (p) => turretController.pos = p, easings.linear)
+            tween(turretControllerOutline.pos, tankPos, .15, (p) => turretControllerOutline.pos = p, easings.linear)
+        } else {
+            turretController.pos = tankController.pos // Assuming attachment to tank controller
+            turretControllerOutline.pos = turretController.pos;
+        }
 
         // Rotation
-        const angularVelocity = 1;
+        const turretPos = tankController.pos;
+        const mouseP = toWorld(targetPosition || mousePos());
+
+        const angle = Math.atan2(mouseP.y - turretPos.y, mouseP.x - turretPos.x);
+        const angleInDeg = ((angle * 180) / Math.PI)-180;
+
+        turretController.angle = angleInDeg
+        turretControllerOutline.angle = angleInDeg
+        turretData.angle = angleInDeg-180
+
+        /* const angularVelocity = 1;
         const currentAngle = turretData.angle;
 
         const turretRotations = Math.floor(currentAngle / 360);
@@ -59,8 +74,8 @@ class Turret {
         const angularDirection = (rotationLeft > rotationRight) ? 1 : -1;
 
         turretData.angle += 100 * angularVelocity * angularDirection * dt()
-        turretController.angle = turretData.angle;
-        turretControllerOutline.angle = turretData.angle;
+        turretController.angle = turretData.angle + 180;
+        turretControllerOutline.angle = turretData.angle + 180; */
     }
 }
 
