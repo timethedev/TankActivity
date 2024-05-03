@@ -1,4 +1,4 @@
-import kaboom, { Color, GameObj } from "kaboom";
+import { GameObj } from "kaboom";
 import "kaboom/global";
 
 import { Turret } from "./Turret";
@@ -12,9 +12,6 @@ const stringToBullet: any = {
     "IceProjectile": IceProjectile
 };
 
-
-
-const RAD_TO_DEG = 180 / Math.PI;
 const DEG_TO_RAD = Math.PI / 180;
 
 interface UserInput {
@@ -32,17 +29,33 @@ class Tank {
             pos(width()/2, height()/2),
             area(),
             scale(0.8),
-            z(0),
+            z(1),
             "Tank",
             userTag,
             {
                 data: this,
             },
         ])
+
+        let shadow: GameObj = add([
+            circle(50),
+            color(0, 0, 0),
+            opacity(.175),
+            z(0)
+        ])
+
+        onUpdate(userTag, () => {
+            shadow.pos = this.controller.pos
+        })
+
+        this.controller.onDestroy(() => {
+            destroy(shadow)
+        })
+
         this.turretData = new Turret(this, userTag);
         this.userId = userId;
     }
-    
+
     controller: GameObj;
     turretData: Turret;
     bullet: string = "Projectile";

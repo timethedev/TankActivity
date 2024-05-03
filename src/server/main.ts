@@ -9,9 +9,8 @@ import "kaboom/global";
 
 import { Socket } from "socket.io-client";
 import { PlayerData } from "../data-structures/PlayerData";
-import Powerups from "../data-structures/Powerups";
-import { randomPositionInsidePolygon } from "../common/Polygon";
-import Maps from "../common/Maps";
+import { Powerup } from "../data-structures/Powerup";
+import { User } from "../data-structures/User";
 
 dotenv.config({ path: ".env" });
 const app = express();
@@ -62,16 +61,18 @@ class Player {
   position: Vec2;
   angle: number;
   alive: boolean;
-  userId: number | undefined;
+  userId: number | string | undefined;
   socket: Socket;
   powerup: Powerup;
   mousePos: Vec2;
+  user: User;
 
   // Initializes a player with a given userId.
-  constructor (userId: number, socket: Socket) {
-    this.userId = userId;
+  constructor (user: User, socket: Socket) {
+    this.userId = user.id;
     this.alive = false;
     this.socket = socket;
+    this.user = user;
   }
 
   changePowerup(powerup: Powerup) {
@@ -95,32 +96,13 @@ class Player {
       angle: this.angle,
       alive: this.alive,
       userId: this.userId,
-      mousePos: this.mousePos
+      mousePos: this.mousePos,
+      powerup: this.powerup
     }
   }
 }
 
-const generateId = (): number => Math.floor(Math.random() * (2 ** 16));
-
-class Powerup {
-  name: string;
-  pos: Vec2;
-  id: number | undefined;
-
-  constructor() {
-    let randomPowerup = Powerups[Math.floor(Math.random() * Powerups.length)] // generate a randomPowerup
-    let randomPos = randomPositionInsidePolygon(Maps[0].polygon.map((p) => { return [p.x, p.y] }))
-
-    this.name = randomPowerup.name
-    if (randomPos) {
-      this.pos = {
-        x: randomPos[0], 
-        y: randomPos[1]
-      }
-    }
-    this.id = generateId() //generate random id for the powerup, inorder to be able to classify this specific one in the future
-  }
-}
+export const generateId = (): number => Math.floor(Math.random() * (2 ** 16));
 
 let Rooms: Room[] = []
 
@@ -132,11 +114,11 @@ class Room {
   powerups: Powerup[];
 
   // Initializes a room with a given channelId and optionally adds a player.
-  constructor (channelId: number, userId: number, socket: Socket | any) {
+  constructor (channelId: number, user: User, socket: Socket | any) {
     let room: Room | undefined = Rooms.find((room) => room.channelId == channelId)
     
     if (room) {
-      room.addPlayer(userId, socket) //add user by default
+      room.addPlayer(user, socket) //add user by default
 
       return room //return room if it already exists
     } else {
@@ -145,35 +127,42 @@ class Room {
       this.players = []
       this.powerups = []
 
-      this.addPlayer(userId, socket) //add user by default
+      this.addPlayer(user, socket) //add user by default
 
       Rooms.push(this) // add the room to Rooms array
+
+      //start infinite loop
+      setInterval(() => {
+        let PlayerData: PlayerData[] = []
+
+        //parse all dta to PlayerData[]
+        this.players.map((Player: Player) => PlayerData.push(Player.getData()))
+        
+        io.to(this.channelId.toString()).emit("update-player-data", PlayerData)
+        io.to(this.channelId.toString()).emit("update-powerups", this.powerups)
+      }, 10)
+
+      setInterval(() => {
+        if (this.powerups.length < 3) {
+          const powerup = new Powerup()
+          this.powerups.push(powerup)
+        }
+      }, 5000)
     }
+  }
 
-    let oldPlayerData = []
-
-    //start infinite loop
-    setInterval(() => {
-      let PlayerData: PlayerData[] = []
+  updateLocalMembers() {
+    if (this.players) {
+      let UserData: User[] = []
 
       //parse all dta to PlayerData[]
-      this.players.map((Player: Player) => PlayerData.push(Player.getData()))
-      oldPlayerData = PlayerData
-      
-      io.to(this.channelId.toString()).emit("update-player-data", PlayerData)
-      io.to(this.channelId.toString()).emit("update-powerups", this.powerups)
-    }, 10)
-
-    setInterval(() => {
-      if (this.powerups.length < 3) {
-        const powerup = new Powerup()
-        this.powerups.push(powerup)
-      }
-    }, 5000)
+      this.players.map((Player: Player) => UserData.push(Player.user))
+      io.to(this.channelId.toString()).emit("update-members", UserData)
+    }
   }
 
   // Retrieves a player from the room based on userId.
-  getPlayer(userId: number | undefined) {
+  getPlayer(userId: number | string | undefined) {
     let player: Player | undefined = this.players.find((player) => player.userId == userId)
     
     if (player) {
@@ -182,24 +171,26 @@ class Room {
   }
 
   // Adds a player to the room.
-  addPlayer(userId: number, socket: Socket | any) {
-    let player: Player | undefined = this.players.find((player) => player.userId == userId)
+  addPlayer(user: User, socket: Socket | any) {
+    let player: Player | undefined = this.players.find((player) => player.userId == user.id)
     
     console.log("adding player")
     if (!player) {
-      this.players.push(new Player(userId, socket))
+      this.players.push(new Player(user, socket))
       socket.join(this.channelId.toString());
     }
   }
 
   // Removes a player from the room.
-  removePlayer(userId: number) {
+  removePlayer(userId: number | string) {
     let playerIndex: number = this.players.findIndex((player) => player.userId == userId)
     console.log(playerIndex)
 
     if (playerIndex >= 0) {
       this.players.splice(playerIndex, 1)
     }
+
+    this.updateLocalMembers()
   }
 
   removePowerup(powerup: Powerup) {
@@ -222,16 +213,23 @@ class Room {
 }
 
 io.on('connection', (socket) => {
-  let userId: number;
+  let userId: number | string;
   let room: Room;
+  let auth: any;
+  let user: User;
   let localPlayer: Player | undefined;
 
   console.log(`[${getTime()}] (${socket.id}): User has connected.`);
 
   socket.on('join-room', (data) =>{
-    userId = data.userId;
-    room = new Room(123456789, userId, socket);
+    auth = data.auth;
+    user = auth.user;
+
+    userId = user.id || generateId();
+    room = new Room(123456789, user, socket);
     localPlayer = room.getPlayer(userId);
+
+    room.updateLocalMembers();
   })
 
   socket.on("send-player-data", (playerData: Player) => {
