@@ -15,12 +15,17 @@
   let auth
 
   let members = ref([])
+  let optionData = ref({})
 
   onMounted(() => {
     setup(socket)
 
     socket.on("update-members", (m) => {
       members.value = m
+    })
+
+    socket.on("update-options", (o) => {
+      optionData.value = o
     })
     
     setupDiscordSdk().then((data) => {
@@ -36,38 +41,6 @@
 
   //show() to show actual game
   //hide() to show menu
-
-  const optionData = ref({
-    title: "VOTE!",
-    subtitle: "Select a game mode to join the game! - 10s left",
-    options: [
-      {
-        name: 'WIP',
-        members: [
-          1,
-          2,
-          3
-        ]
-      }, 
-      {
-        name: 'Classic',
-        members: [
-          1,
-          2
-        ]
-      }, 
-      {
-        name: 'Random',
-        members: [
-          1,
-          2,
-          3,
-          2,
-          2
-        ]
-      },
-    ]
-  })
 </script>
 
 <template>

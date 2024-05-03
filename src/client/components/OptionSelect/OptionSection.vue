@@ -1,12 +1,17 @@
 <script setup lang="ts">   
     import OptionCircle from "./OptionCircle.vue"
-    import { defineProps, ref } from 'vue'
+    import { defineProps, ref, watch } from 'vue'
 
     const props = defineProps({
         options: Array as PropType<{ name: string, members: number[] }[]>,
     })
 
-    const options = ref(props.options)
+    const options = ref()
+
+    watch(() => props.options, (o) => {
+        console.log(o)
+        options.value = o;
+    })
 </script>
 
 <template>

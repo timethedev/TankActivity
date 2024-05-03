@@ -106,12 +106,36 @@ export const generateId = (): number => Math.floor(Math.random() * (2 ** 16));
 
 let Rooms: Room[] = []
 
+class Option {
+  name: string;
+  members: number[] | string[] | any[]
+
+  constructor (name: string) {
+    this.name = name
+  }
+}
+
+interface Options {
+  title: string;
+  subtitle: string;
+  options: Option[]
+}
+
 // Represents a room in the game where players interact.
 class Room {
   channelId: number;
   inProgress: boolean;
   players: Player[];
   powerups: Powerup[];
+  options: Options = {
+    title: "VOTE!",
+    subtitle: "Hey from the server!",
+    options: [
+      new Option("WIP"),
+      new Option("Classic"),
+      new Option("Random"),
+    ]
+  }
 
   // Initializes a room with a given channelId and optionally adds a player.
   constructor (channelId: number, user: User, socket: Socket | any) {
@@ -131,6 +155,7 @@ class Room {
 
       Rooms.push(this) // add the room to Rooms array
 
+      let oldOptions: Options;
       //start infinite loop
       setInterval(() => {
         let PlayerData: PlayerData[] = []
@@ -140,6 +165,11 @@ class Room {
         
         io.to(this.channelId.toString()).emit("update-player-data", PlayerData)
         io.to(this.channelId.toString()).emit("update-powerups", this.powerups)
+
+        if (oldOptions != this.options) {
+          io.to(this.channelId.toString()).emit("update-options", this.options)
+          oldOptions = this.options
+        }
       }, 10)
 
       setInterval(() => {
@@ -201,6 +231,21 @@ class Room {
     }
   }
 
+  selectOption(userId: number | string, selectedOption: string) {
+    this.options.options.forEach((option) => {
+      const members = option.members
+
+      members.map((member, index) => {
+        if (member == userId) {
+          members.splice(index, 1)
+        }
+      })
+    })
+
+    let option = this.options.options.find((o) => o.name == selectedOption)
+    option?.members.push(userId)
+  }
+
   // Marks the start of a round in the room.
   startRound() {
     this.inProgress = true;
@@ -260,6 +305,12 @@ io.on('connection', (socket) => {
         player.changePowerup(powerup)
         room.removePowerup(powerup)
       }
+    }
+  })
+
+  socket.on("select-option", (data) => {
+    if (room) {
+      room.selectOption(userId, data.selectedOption) 
     }
   })
 
