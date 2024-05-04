@@ -1,18 +1,30 @@
 <script setup lang="ts">
-  import { defineProps, ref } from 'vue'
+  import { defineProps, ref, watch } from 'vue'
   import PlayerIcon from './PlayerIcon.vue'
+  import { socket } from "../../socket"
 
   const props = defineProps({
     scaled: Boolean,
     option: String
   })
 
+  const option = ref(props.option)
   const scaledClass = ref(props.scaled ? 'scaled' : '')
+
+  watch(() => props.option, (o) => {
+    option.value = o
+  })
+
+  const handleClick = () => {
+    socket.emit("select-option", {
+      selectedOption: option.value.name
+    })
+  }
 </script>
 
 <template>
   <div :class="`optionCircleCont ${scaledClass}`">
-    <div class="optionCircle">
+    <div class="optionCircle" @click="handleClick">
       <div class="playerList">
         <PlayerIcon v-for="member in option.members" :key="member" :member="member"/>
       </div>

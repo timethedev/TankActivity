@@ -9,7 +9,7 @@ import { Turret } from "../assets/objects/Turret";
 import { Powerup } from "../assets/objects/Powerup"
 import Maps from "../../common/Maps";
 
-export default function game(socket: any) {
+export default function game(socket: any, mapId: number, auth: any) {
 // Interfaces
 interface UserInput {
     left: number,
@@ -39,25 +39,6 @@ loadSprite("Sea", "src/client/assets/sprites/Sea.png")
 
 /* debug.inspect = true */
 
-
-// Mathematical Functions
-const RAD_TO_DEG: number = 180 / Math.PI;
-const DEG_TO_RAD: number = Math.PI / 180;
-
-function vectorToAngle(vector: Vec2): number {
-    return Math.atan2(vector.y, vector.x) * RAD_TO_DEG; // Assuming conversion to degrees
-}
-
-function angleToVector(angleInDegrees: number): Vec2 {
-    const angleInRadians: number = angleInDegrees * DEG_TO_RAD; // Assuming conversion to radians
-    const x: number = Math.cos(angleInRadians);
-    const y: number = Math.sin(angleInRadians);
-    return vec2(x, y);
-}
-
-function Lerp(start: number, end: number, t: number) {
-    return start * (1 - t) + end * t;
-}
 
 function distance(pos1: Vec2, pos2: Vec2): number {
     return Math.sqrt((pos1.x - pos2.x) ** 2 + (pos1.y - pos2.y) ** 2);
@@ -119,7 +100,7 @@ if (!CAM) {
     })
 }
 
-let map = Maps[0]
+let map = Maps[mapId]
 let mapPolygon = {
     adjusted: map.polygon.map((point) => {return vec2(Math.ceil((point.x-(width()/2))/1.5), Math.ceil((point.y-(height()/2))/1.5))}),
     unadjusted: map.polygon.map((point) => { return vec2(Math.ceil(point.x), Math.ceil(point.y))})
@@ -177,22 +158,10 @@ onUpdate(() => { // Control Camera Dynamic Zoom Effect
 
 
 // localClient-SIDE SERVER MANAGEMENT
-const generateUserId = (): number => Math.floor(Math.random() * (2 ** 16));
-const localClientUserId: number = generateUserId();
-
-// Simple Constant Data
-const Red: Color = rgb(255, 0, 62);
-const Blue: Color = rgb(62, 0, 255);
+const localClientUserId: number = auth.user.id;
 
 // LocalClient Tank Creation
 const localClientTank: Tank = new Tank("LocalClient", localClientUserId);
-
-class Player {
-    constructor (id: string | undefined) {
-        this.id = id;
-    }
-    id: string | undefined;
-}
 
 //Update Player Controller Data Every Second
 socket.on("update-player-data", (allPlayerData: PlayerData[]) => {
@@ -204,7 +173,7 @@ socket.on("update-player-data", (allPlayerData: PlayerData[]) => {
         if (playerUserId) {
             let tankData: Tank = PlayerControllers.find((playerController) => playerData.userId == playerController.data.userId)?.data || new Tank(`Player_${playerData.userId}`, playerData.userId);
 
-            if (playerData.userId != localClientTank.userId) {
+            if (playerData.userId != localClientTank.userId && playerData?.position?.x) {
                 tween(tankData.controller.pos, vec2(playerData.position.x, playerData.position.y), .15, (p) => tankData.controller.pos = p, easings.linear)
                 tankData.controller.angle = playerData.angle
 
@@ -218,7 +187,8 @@ socket.on("update-player-data", (allPlayerData: PlayerData[]) => {
     // Remove tank controller if player has left
     PlayerControllers.map((playerController) => {
         const playerData: PlayerData | undefined = allPlayerData.find((playerData) => playerController.data.userId == playerData.userId)
-        if (!playerData) {
+        
+        if ((!playerData || !playerData.alive) && !playerController.is("LocalClient")) {
             destroy(playerController.data?.turretData.controller)
             destroy(playerController.data?.turretData.controllerOutline)
             destroy(playerController)
@@ -245,7 +215,7 @@ socket.on("update-powerups", (PowerupsData: Powerup[]) => {
 })
 
 //Handle Projectile Shot
-socket.on("shoot-projectile", (data) => {
+socket.on("shoot-projectile", (data: any) => {
     const PlayerControllers = get("Tank");
     
     PlayerControllers.map((playerController: GameObj) => {
@@ -258,7 +228,7 @@ socket.on("shoot-projectile", (data) => {
     });
 })
 
-socket.on("collect-powerup", (data) => {
+socket.on("collect-powerup", (data: any) => {
     console.log("collected ", data.powerup)
 })
 
@@ -276,7 +246,6 @@ onCollide("Tank", "Projectile", (tankObj: GameObj, projectileObj: GameObj) => {
 onCollide("Tank", "Powerup", (tankObj: GameObj, powerupObj: GameObj) => {
     const tank: Tank = tankObj.data
     const powerup: Powerup = powerupObj.data
-    console.log(tank.userId, localClientUserId)
     
     if (tank.userId == localClientUserId) {
         socket.emit("collect-powerup", {

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-  import getAvatar from '../../discord/getAvatar.js';
-  import { defineProps, ref, onUpdated } from 'vue'
+  import getAvatar from '../../discord/getAvatar';
+  import { defineProps } from 'vue'
 
   const props = defineProps({
     member: Object

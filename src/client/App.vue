@@ -7,15 +7,20 @@
   import { setupDiscordSdk } from "./discord/discordSdk";
 
   import setup, { showGame, hideGame } from './kaboom/setup'
-
-  import { io } from "socket.io-client";
-  const socket = io({transports: ["websocket"] });
+  import { socket } from './socket'
 
   let discordSdk: any;
   let auth
 
   let members = ref([])
   let optionData = ref({})
+  let optionTitle = ref("")
+
+  const compareArrays = (a: any[], b: any[]) => {
+    return JSON.stringify(a) === JSON.stringify(b);
+  };
+
+  let oldOptions: any;
 
   onMounted(() => {
     setup(socket)
@@ -25,7 +30,16 @@
     })
 
     socket.on("update-options", (o) => {
-      optionData.value = o
+      if (!compareArrays(oldOptions?.options, o?.options)) {
+        optionData.value = o
+        oldOptions = o
+      }
+
+      optionTitle.value = `${o.title} ${(o.counting && o.timer != 10) ? `- ${o.timer}s` : ''}`
+    })
+
+    socket.on("start-round", (data) => {
+      showGame(data.mapId)
     })
     
     setupDiscordSdk().then((data) => {
@@ -51,7 +65,7 @@
     <CircleButton icon="/assets/settings.png"/>
   </div>
 
-  <Title :title="optionData.title" :subtitle="optionData.subtitle"/>
+  <Title :title="optionTitle" :subtitle="optionData.subtitle"/>
   <OptionSection :options="optionData.options"/>
   <PlayerPill :members="members"/>
 </template>

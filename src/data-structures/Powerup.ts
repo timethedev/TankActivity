@@ -8,9 +8,9 @@ export class Powerup {
   pos: Vec2;
   id: number | undefined;
 
-  constructor() {
+  constructor(mapId: number) {
     let randomPowerup = Powerups[Math.floor(Math.random() * Powerups.length)]; // generate a randomPowerup
-    let randomPos = randomPositionInsidePolygon(Maps[0].polygon.map((p) => { return [p.x, p.y]; }));
+    let randomPos = randomPositionInsidePolygon(Maps[mapId].polygon.map((p) => { return [p.x, p.y]; }));
 
     this.name = randomPowerup.name;
     if (randomPos) {

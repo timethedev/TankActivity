@@ -11,6 +11,7 @@ import { Socket } from "socket.io-client";
 import { PlayerData } from "../data-structures/PlayerData";
 import { Powerup } from "../data-structures/Powerup";
 import { User } from "../data-structures/User";
+import Maps from "../common/Maps";
 
 dotenv.config({ path: ".env" });
 const app = express();
@@ -108,17 +109,107 @@ let Rooms: Room[] = []
 
 class Option {
   name: string;
-  members: number[] | string[] | any[]
+  members: User[];
+  data: number | string;
 
-  constructor (name: string) {
+  constructor (name: string, data: number | string) {
     this.name = name
+    this.members = []
+    this.data = data
   }
 }
 
-interface Options {
+class Options {
   title: string;
   subtitle: string;
-  options: Option[]
+  options: Option[];
+  timer: number;
+  room: Room;
+  counting: Boolean;
+  selected: any;
+
+  constructor(room: Room) {
+    this.room = room
+  }
+
+  createOption(title: string, subtitle: string, options: Option[]) {
+    const defaultTimer: number = 10;
+
+    return new Promise((resolve) => {
+        this.title = title;
+        this.subtitle = subtitle;
+        this.options = options;
+        this.timer = defaultTimer;
+
+        const intervalId = setInterval(() => {
+          let highestOption = {option: {}, votes: 0}
+
+          this.options.forEach((option) => {
+            if (option.members.length >= highestOption.votes) {
+              highestOption = {
+                option: option,
+                votes: option.members.length
+              }
+            }
+          })
+
+          if (highestOption.votes != 0) {
+            this.timer -= 1;
+            this.counting = true
+          } else {
+            this.timer = defaultTimer
+            this.counting = false
+          }
+
+          if (this.timer == 0) {
+            clearInterval(intervalId); // clear interval when done
+            resolve(highestOption.option); // resolve the promise
+          }
+
+          if (this.room.players.length == 0) {
+            clearInterval(intervalId); // clear interval when done
+            resolve(null); // resolve the promise
+          }
+        }, 1000);
+    });
+  }
+
+  async start() {
+    return new Promise(async (resolve) => {
+      let firstOption: Option | any = await this.createOption(
+        "VOTE!", 
+        "Select a game mode to join the game!", 
+        [ new Option("WIP", "wip"), new Option("Classic", "classic"), new Option("Random", "random") ]
+      )
+
+      if (!firstOption) return;
+
+      let secondOption: Option | any = await this.createOption(
+        "VOTE!", 
+        "Select a round duration to join the game!",
+        [ new Option("2 rounds", 2), new Option("3 rounds", 3), new Option("6 rounds", 6) ]
+      )
+
+      if (!secondOption) return;
+
+      this.selected = {
+        gamemode: firstOption.data,
+        rounds: secondOption.data,
+      }
+
+      resolve(this.selected)
+    })
+  }
+
+  getData() {
+    return {
+      title: this.title,
+      subtitle: this.subtitle,
+      options: this.options,
+      timer: this.timer,
+      counting: this.counting
+    }
+  }
 }
 
 // Represents a room in the game where players interact.
@@ -127,15 +218,8 @@ class Room {
   inProgress: boolean;
   players: Player[];
   powerups: Powerup[];
-  options: Options = {
-    title: "VOTE!",
-    subtitle: "Hey from the server!",
-    options: [
-      new Option("WIP"),
-      new Option("Classic"),
-      new Option("Random"),
-    ]
-  }
+  options: Options; 
+  deleted: Boolean;
 
   // Initializes a room with a given channelId and optionally adds a player.
   constructor (channelId: number, user: User, socket: Socket | any) {
@@ -151,33 +235,32 @@ class Room {
       this.players = []
       this.powerups = []
 
-      this.addPlayer(user, socket) //add user by default
+      this.addPlayer(user, socket); //add user by default
 
-      Rooms.push(this) // add the room to Rooms array
+      Rooms.push(this); // add the room to Rooms array
 
-      let oldOptions: Options;
+      this.startGame();
+      
       //start infinite loop
       setInterval(() => {
+        if (this.deleted) return;
+        let aliveCount: number = 0;
         let PlayerData: PlayerData[] = []
 
         //parse all dta to PlayerData[]
-        this.players.map((Player: Player) => PlayerData.push(Player.getData()))
-        
+        this.players.map((Player: Player) => {
+          PlayerData.push(Player.getData())
+          if (Player.alive) aliveCount += 1
+        })
+
+        if (aliveCount <= 1) {
+          this.stopRound()
+        }
+
         io.to(this.channelId.toString()).emit("update-player-data", PlayerData)
         io.to(this.channelId.toString()).emit("update-powerups", this.powerups)
-
-        if (oldOptions != this.options) {
-          io.to(this.channelId.toString()).emit("update-options", this.options)
-          oldOptions = this.options
-        }
+        io.to(this.channelId.toString()).emit("update-options", this.options.getData())
       }, 10)
-
-      setInterval(() => {
-        if (this.powerups.length < 3) {
-          const powerup = new Powerup()
-          this.powerups.push(powerup)
-        }
-      }, 5000)
     }
   }
 
@@ -220,6 +303,15 @@ class Room {
       this.players.splice(playerIndex, 1)
     }
 
+    if (this.players.length == 0) {
+      let roomIndex: number = Rooms.findIndex((r) => r.channelId == this.channelId)
+
+      if (roomIndex >= 0) {
+        this.deleted = true;
+        Rooms.splice(roomIndex, 1)
+      }
+    }
+
     this.updateLocalMembers()
   }
 
@@ -231,24 +323,85 @@ class Room {
     }
   }
 
-  selectOption(userId: number | string, selectedOption: string) {
+  selectOption(Player: Player, selectedOption: string | null) {
+    let alreadySelected: Boolean = false;
+
     this.options.options.forEach((option) => {
       const members = option.members
 
       members.map((member, index) => {
-        if (member == userId) {
+        if (member.id == Player.userId) {
+          alreadySelected = (option.name == selectedOption)
           members.splice(index, 1)
         }
       })
     })
 
-    let option = this.options.options.find((o) => o.name == selectedOption)
-    option?.members.push(userId)
+    if (selectedOption) {
+      if (!alreadySelected) {
+        let option = this.options.options.find((o) => o.name == selectedOption)
+        option?.members.push(Player.user)
+      }
+    }
   }
 
   // Marks the start of a round in the room.
-  startRound() {
-    this.inProgress = true;
+  async startGame() {
+    //kill everyone on game start
+    this.players.forEach((p: Player) => {
+      p.alive = false;
+    })
+
+    //ask for options and wait
+    this.options = new Options(this);
+    await this.options.start();
+    
+    //get all playing members
+    let playingMembers: any[] = []
+    this.options.options.forEach((o) => {
+      o.members.forEach((m) => {
+        playingMembers.push(this.getPlayer(m.id));
+      })
+    })
+
+    for (let i = 0; i < this.options.selected.rounds; i++) {
+      let roundEnded: boolean = false;
+      let mapId: number = Math.floor(Math.random() * Maps.length);
+
+      //despawn all powerups
+      this.powerups = []
+
+      //only add players who select options
+      playingMembers.forEach((m: Player) => {
+        m.alive = true;
+      })
+
+      io.to(this.channelId.toString()).emit("start-round", {
+        mapId: mapId
+      }) 
+
+      let i: any = setInterval(() => {
+        if (this.deleted || roundEnded) clearInterval(i);
+        if (this.powerups.length < 3) {
+          const powerup = new Powerup(mapId)
+          this.powerups.push(powerup)
+        }
+      }, 5000)
+
+      this.inProgress = true;
+
+      //wait until round ends
+      await new Promise((resolve) => {
+        const interval = setInterval(() => {
+          if (!this.inProgress) {
+            clearInterval(interval);
+            roundEnded = true;
+
+            setTimeout(() => resolve(null), 5000)
+          }
+        }, 100);
+      });
+    }
   }
 
   // Marks the end of a round in the room.
@@ -270,7 +423,7 @@ io.on('connection', (socket) => {
     auth = data.auth;
     user = auth.user;
 
-    userId = user.id || generateId();
+    userId = user.id;
     room = new Room(123456789, user, socket);
     localPlayer = room.getPlayer(userId);
 
@@ -282,15 +435,19 @@ io.on('connection', (socket) => {
   })
 
   socket.on("shoot-projectile", (data) => {
-    if (room) io.to(room.channelId.toString()).emit("shoot-projectile", data)
+    if (room) {
+      if (localPlayer?.alive) {
+        io.to(room.channelId.toString()).emit("shoot-projectile", data)
+      }
+    }
   })
 
   socket.on("kill-tank", (data) => {
     if (room) {
       let reciever = room.getPlayer(data.recieverUserId)
 
-      if (reciever) {
-        reciever.socket.disconnect();
+      if (localPlayer?.alive && reciever) {
+        reciever.alive = false;
       }
     }
   })
@@ -299,7 +456,7 @@ io.on('connection', (socket) => {
     if (room) {
       const player = room.getPlayer(userId)
 
-      if (player) {
+      if (player && localPlayer?.alive) {
         const powerup: Powerup = data.powerup
         
         player.changePowerup(powerup)
@@ -310,7 +467,9 @@ io.on('connection', (socket) => {
 
   socket.on("select-option", (data) => {
     if (room) {
-      room.selectOption(userId, data.selectedOption) 
+      if (localPlayer) {
+        room.selectOption(localPlayer, data.selectedOption)
+      } 
     }
   })
 
@@ -318,6 +477,10 @@ io.on('connection', (socket) => {
     console.log(`[${getTime()}] (${socket.id}): User has disconnected.`)
     
     if (room) {
+      if (localPlayer) {
+        room.selectOption(localPlayer, null)
+      } 
+
       room.removePlayer(userId);
     }
   });

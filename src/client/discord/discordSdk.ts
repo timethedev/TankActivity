@@ -1,12 +1,12 @@
 import { DiscordSDKMock, DiscordSDK } from '@discord/embedded-app-sdk';
-const discordSdk = new DiscordSDKMock(import.meta.env.VITE_DISCORD_CLIENT_ID, "1928", "38393");
+const discordSdk = new DiscordSDK(import.meta.env.VITE_DISCORD_CLIENT_ID, "1928", "38393");
+
+let auth: any;
 
 async function setupDiscordSdk() {
     // Wait for READY payload from the discord client
     await discordSdk.ready();
     console.log("Discord SDK is ready");
-
-    let auth;
 
     // Pop open the OAuth permission modal and request for access to scopes listed in scope array below
     const {code} = await discordSdk.commands.authorize({
@@ -48,7 +48,12 @@ async function invite() {
     await discordSdk.commands.openInviteDialog()
 }
 
+function getAuth(){
+    return auth;
+}
+
 export {
     setupDiscordSdk,
-    invite
+    invite,
+    getAuth
 }

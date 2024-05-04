@@ -1,15 +1,16 @@
 <script setup lang="ts">
   import { defineProps, ref } from 'vue'
+  import getAvatar from '../../discord/getAvatar';
 
   const props = defineProps({
-    src: String
+    member: Object
   })
 
-  const src = ref(props.src)
+  const member = ref(props.member)
 </script>
 
 <template>
-  <img class="playerIcon" :src="`https://i.imgur.com/o7JdGRL.png`"/>
+  <img class="playerIcon" :src="getAvatar(member)"/>
 </template>
 
 <style scoped>
