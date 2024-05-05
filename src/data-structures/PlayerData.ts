@@ -10,6 +10,9 @@ export interface PlayerData {
   userId: number | string | undefined;
   powerup: Powerup;
   mousePos: Vec2;
+  index: number;
+  ammo: number;
+  reloading: boolean;
 }
 
 

@@ -38,6 +38,10 @@ async function setupDiscordSdk() {
         throw new Error("Authenticate command failed");
     }
 
+    if (auth.user.username == "mock_user_username") {
+        auth.user.id = Date.now()
+    }
+
     return {
         discordSdk, 
         auth

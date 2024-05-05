@@ -17,15 +17,14 @@ function angleToVector(angleInDegrees: number): Vec2 {
     return vec2(x, y);
 }
 
-
 class Fire {
     constructor (origin: Projectile, position: Vec2) {
         this.origin = origin;
         this.controller = add([
-            rect(60, 60),
+            sprite("Fire"),
             anchor("center"),
-            color(252, 111, 3),
             area(),
+            scale(.3),
             timer(),
             pos(position),
             offscreen({ destroy: true }),

@@ -61,12 +61,18 @@ export type Vec2 = {x: number, y: number}
 class Player {
   position: Vec2;
   angle: number;
-  alive: boolean;
+  alive: boolean = false;
   userId: number | string | undefined;
   socket: Socket;
   powerup: Powerup;
   mousePos: Vec2;
+  spectating: boolean = false;
   user: User;
+  wins: number;
+  index: number;
+
+  ammo: number = 3;
+  reloading: boolean;
 
   // Initializes a player with a given userId.
   constructor (user: User, socket: Socket) {
@@ -74,6 +80,7 @@ class Player {
     this.alive = false;
     this.socket = socket;
     this.user = user;
+    this.wins = 0;
   }
 
   changePowerup(powerup: Powerup) {
@@ -98,7 +105,13 @@ class Player {
       alive: this.alive,
       userId: this.userId,
       mousePos: this.mousePos,
-      powerup: this.powerup
+      powerup: this.powerup,
+      wins: this.wins,
+      user: this.user,
+      spectating: this.spectating,
+      index: this.index,
+      ammo: this.ammo,
+      reloading: this.reloading
     }
   }
 }
@@ -128,12 +141,16 @@ class Options {
   counting: Boolean;
   selected: any;
 
+  mapId:number;
+  originalRounds: number;
+  actualRounds: number;
+
   constructor(room: Room) {
     this.room = room
   }
 
   createOption(title: string, subtitle: string, options: Option[]) {
-    const defaultTimer: number = 10;
+    const defaultTimer: number = 5;
 
     return new Promise((resolve) => {
         this.title = title;
@@ -215,11 +232,13 @@ class Options {
 // Represents a room in the game where players interact.
 class Room {
   channelId: number;
+  gameInProgress: boolean;
   inProgress: boolean;
   players: Player[];
   powerups: Powerup[];
   options: Options; 
   deleted: Boolean;
+  roundId: number;
 
   // Initializes a room with a given channelId and optionally adds a player.
   constructor (channelId: number, user: User, socket: Socket | any) {
@@ -244,16 +263,23 @@ class Room {
       //start infinite loop
       setInterval(() => {
         if (this.deleted) return;
-        let aliveCount: number = 0;
+        let alivePlayers: Player[] = [];
         let PlayerData: PlayerData[] = []
 
         //parse all dta to PlayerData[]
         this.players.map((Player: Player) => {
           PlayerData.push(Player.getData())
-          if (Player.alive) aliveCount += 1
+          if (Player.alive == true) alivePlayers.push(Player)
         })
 
-        if (aliveCount <= 1) {
+        if (this.inProgress && alivePlayers.length <= 1) {
+          //add win to player if won a round
+          if (alivePlayers[0]) {
+            alivePlayers[0].wins += 1
+          }
+
+          io.to(this.channelId.toString()).emit("toggle-scoreboard", true)
+
           this.stopRound()
         }
 
@@ -266,16 +292,19 @@ class Room {
 
   updateLocalMembers() {
     if (this.players) {
-      let UserData: User[] = []
+      let PlayerData: PlayerData[] = []
 
       //parse all dta to PlayerData[]
-      this.players.map((Player: Player) => UserData.push(Player.user))
-      io.to(this.channelId.toString()).emit("update-members", UserData)
+      this.players.map((Player: Player) => {
+        PlayerData.push(Player.getData())
+      })
+
+      io.to(this.channelId.toString()).emit("update-members", PlayerData)
     }
   }
 
   // Retrieves a player from the room based on userId.
-  getPlayer(userId: number | string | undefined) {
+  getPlayer(userId: number | string | undefined) : Player | any {
     let player: Player | undefined = this.players.find((player) => player.userId == userId)
     
     if (player) {
@@ -287,7 +316,6 @@ class Room {
   addPlayer(user: User, socket: Socket | any) {
     let player: Player | undefined = this.players.find((player) => player.userId == user.id)
     
-    console.log("adding player")
     if (!player) {
       this.players.push(new Player(user, socket))
       socket.join(this.channelId.toString());
@@ -297,7 +325,6 @@ class Room {
   // Removes a player from the room.
   removePlayer(userId: number | string) {
     let playerIndex: number = this.players.findIndex((player) => player.userId == userId)
-    console.log(playerIndex)
 
     if (playerIndex >= 0) {
       this.players.splice(playerIndex, 1)
@@ -350,40 +377,74 @@ class Room {
     //kill everyone on game start
     this.players.forEach((p: Player) => {
       p.alive = false;
+      p.wins = 0;
+      p.spectating = true
     })
 
     //ask for options and wait
     this.options = new Options(this);
     await this.options.start();
+
+    this.gameInProgress = true
     
-    //get all playing members
-    let playingMembers: any[] = []
+    console.log("playing members: ")
+    //remove spectating from all playing members
     this.options.options.forEach((o) => {
       o.members.forEach((m) => {
-        playingMembers.push(this.getPlayer(m.id));
+        this.players.forEach((p: Player) => {
+          if (m.id == p.userId) {
+            console.log(p.userId, p.spectating)
+            
+            p.spectating = false
+          }
+        })
       })
     })
+    console.log("----")
 
-    for (let i = 0; i < this.options.selected.rounds; i++) {
+    this.options.originalRounds = this.options.selected.rounds;
+    this.options.actualRounds = this.options.originalRounds;
+
+    for (let i = 0; i < this.options.actualRounds; i++) {
       let roundEnded: boolean = false;
-      let mapId: number = Math.floor(Math.random() * Maps.length);
+      this.options.mapId = Math.floor(Math.random() * Maps.length);
 
       //despawn all powerups
       this.powerups = []
 
-      //only add players who select options
-      playingMembers.forEach((m: Player) => {
-        m.alive = true;
+      let totalPlayers: Player[] = [];
+      //only add players who aren't spectating
+      this.players.forEach((p: Player) => {
+        console.log(p.userId, p.spectating)
+        if (!p.spectating) {
+          totalPlayers.push(p)
+        } else {
+          this.spectate(p)
+        }
       })
 
-      io.to(this.channelId.toString()).emit("start-round", {
-        mapId: mapId
-      }) 
+      if (totalPlayers.length <= 1) {
+        break;
+      }
+
+      totalPlayers.forEach((p: Player, index: number) => {
+        p.alive = true;
+        p.index = index
+        p.ammo = 3;
+
+        p.socket.emit("start-round", {
+          mapId: this.options.mapId,
+          spawnpoint: p.index,
+          options: this.options.selected,
+          overtime: this.options.actualRounds > this.options.originalRounds
+        }) 
+      })
+
 
       let i: any = setInterval(() => {
         if (this.deleted || roundEnded) clearInterval(i);
         if (this.powerups.length < 3) {
-          const powerup = new Powerup(mapId)
+          const powerup = new Powerup(this.options.mapId)
           this.powerups.push(powerup)
         }
       }, 5000)
@@ -397,10 +458,42 @@ class Room {
             clearInterval(interval);
             roundEnded = true;
 
-            setTimeout(() => resolve(null), 5000)
+            setTimeout(() => {
+              io.to(this.channelId.toString()).emit("toggle-scoreboard", false)
+              resolve(null)
+            }, 5000)
           }
         }, 100);
+
+        function checkForDraw(players: Player[]) {
+          let maxWins = Math.max(...players.map((player: Player) => player.wins));
+          let playersWithMaxWins = players.filter((player: Player) => player.wins === maxWins);
+          return playersWithMaxWins.length > 1;
+      }
+
+        if (i >= this.options.originalRounds) {
+          let draw = checkForDraw(this.players)
+          if (draw) this.options.actualRounds += 1
+        }
       });
+    }
+
+    this.gameInProgress = false;
+    io.to(this.channelId.toString()).emit("end-game", true)
+    this.startGame()
+  }
+
+  spectate(Player: Player | undefined) {
+    if (Player) {
+      Player.alive = false
+      Player.spectating = true
+
+      Player.socket.emit("start-round", {
+        mapId: this.options.mapId,
+        options: this.options.selected,
+        overtime: null,
+        spectating: true
+      }) 
     }
   }
 
@@ -427,6 +520,8 @@ io.on('connection', (socket) => {
     room = new Room(123456789, user, socket);
     localPlayer = room.getPlayer(userId);
 
+    if (room.gameInProgress) room.spectate(localPlayer)
+
     room.updateLocalMembers();
   })
 
@@ -436,8 +531,23 @@ io.on('connection', (socket) => {
 
   socket.on("shoot-projectile", (data) => {
     if (room) {
-      if (localPlayer?.alive) {
+      if (localPlayer?.alive && localPlayer?.ammo > 0 && !localPlayer.reloading) {
+        localPlayer.ammo -= 1
         io.to(room.channelId.toString()).emit("shoot-projectile", data)
+
+        if (localPlayer.ammo == 0) {
+          //add ammo every 3 seconds
+          localPlayer.reloading = true
+          
+          for (let i = 0; i < 3; i++) {
+            setTimeout(() => {
+              if(localPlayer && localPlayer?.ammo < 3) localPlayer.ammo += 1
+              if (localPlayer?.ammo == 3) {
+                localPlayer.reloading = false;
+              }
+            }, 1000 * (i + 1));
+          }
+        }
       }
     }
   })

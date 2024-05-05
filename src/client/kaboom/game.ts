@@ -9,7 +9,16 @@ import { Turret } from "../assets/objects/Turret";
 import { Powerup } from "../assets/objects/Powerup"
 import Maps from "../../common/Maps";
 
-export default function game(socket: any, mapId: number, auth: any) {
+
+
+/////////// START //////////////////
+export default function game(socket: any, mapId: number, index:number, auth: any) {
+//Remove all listeners, otherwise will multiply
+socket.removeAllListeners("update-powerups");
+socket.removeAllListeners("shoot-projectile");
+
+let changedScene = false
+
 // Interfaces
 interface UserInput {
     left: number,
@@ -27,10 +36,22 @@ const stringToBullet: any = {
 
 loadSprite("Bullet", "src\\client\\assets\\sprites\\Bullet.png")
 
-loadSprite("RedTank", "src\\client\\assets\\sprites\\Red\\Tank.png")
-loadSprite("RedTurret", "src\\client\\assets\\sprites\\Red\\Turret.png")
-loadSprite("RedTurretOutline", "src\\client\\assets\\sprites\\Red\\TurretOutline.png")
+loadSprite("RedTank", "/tanks/red/Tank.png")
+loadSprite("RedTurret", "/tanks/red/Turret.png")
 
+loadSprite("YellowTank", "/tanks/yellow/Tank.png")
+loadSprite("YellowTurret", "/tanks/yellow/Turret.png")
+
+loadSprite("GreenTank", "/tanks/green/Tank.png")
+loadSprite("GreenTurret", "/tanks/green/Turret.png")
+
+loadSprite("BlueTank", "/tanks/blue/Tank.png")
+loadSprite("BlueTurret", "/tanks/blue/Turret.png")
+
+loadSprite("TurretOutline", "/tanks/TurretOutline.png")
+
+
+loadSprite("Fire", `/assets/fire.png`)
 loadSprite("PowerupOrb", "src/client/assets/sprites/PowerupOrb.png")
 
 /* loadSprite("Collisions", "src\\client\\assets\\sprites\\Map-test\\collisions.png") */
@@ -79,7 +100,11 @@ onUpdate("Projectile", (projectileController: GameObj) => { // Use Projectile ty
 });
 
 onKeyPress("space", () => { // Shoot projectile
-    localClientTank.shoot(socket);
+    if (!reloading) {
+        localClientTank.shoot(socket)
+    } else {
+        shake(.5)
+    }
 });
 
 
@@ -101,10 +126,54 @@ if (!CAM) {
 }
 
 let map = Maps[mapId]
+
+let spawnPos = index >= 0 ? vec2(map.spawns[index][0], map.spawns[index][1]) : vec2(0, 0)
 let mapPolygon = {
     adjusted: map.polygon.map((point) => {return vec2(Math.ceil((point.x-(width()/2))/1.5), Math.ceil((point.y-(height()/2))/1.5))}),
     unadjusted: map.polygon.map((point) => { return vec2(Math.ceil(point.x), Math.ceil(point.y))})
 }
+
+
+/* add([
+    sprite("Ground"),
+    "Ground",
+    anchor("center"),
+    scale(1.5),
+    pos(width()/2, height()/2),
+    z(-5),
+    area({ shape: new Polygon(mapPolygon.adjusted) })
+]) */
+
+//map detail handler (stones & stuff) - configure in /common/Maps.ts
+map.details.forEach((detail) => {
+    if (detail.img) loadSprite(detail.name, detail.img)
+
+    let comps = [
+        detail.name,
+        z(-4),
+    ]
+
+    if (detail.img) comps.push(sprite(detail.name));
+    if (detail.size) comps.push(rect(detail.size[0], detail.size[1]));
+    if (detail.rot) comps.push(rotate(detail.rot))
+    if (detail.pos) comps.push(pos(detail.pos.x, detail.pos.y))
+    if (detail.kill) comps.push("Killer")
+
+    if (detail.collider) {
+        if (!detail.kill) {
+            comps.push(body({ isStatic: true }))
+            comps.push("Collider")
+        }
+
+        if (detail.collider == "area") {
+            comps.push(area())
+        } else {
+            comps.push(area({shape: new Polygon(detail.collider)}))
+        }
+    }
+    
+    add(comps)
+})
 
 loadSprite("Ground", map.img)
 
@@ -159,28 +228,46 @@ onUpdate(() => { // Control Camera Dynamic Zoom Effect
 
 // localClient-SIDE SERVER MANAGEMENT
 const localClientUserId: number = auth.user.id;
+let reloading: boolean = false;
+let localClientData: PlayerData;
+
+onUpdate(() => {
+    if (localClientData) {
+        reloading = localClientData.reloading
+        if (localClientData.ammo == 0) reloading = true
+    }
+})
 
 // LocalClient Tank Creation
-const localClientTank: Tank = new Tank("LocalClient", localClientUserId);
+const localClientTank: Tank = new Tank("LocalClient", index, localClientUserId);
+if (index >= 0) localClientTank.controller.pos = spawnPos
 
 //Update Player Controller Data Every Second
-socket.on("update-player-data", (allPlayerData: PlayerData[]) => {
+function updatePlayerData(allPlayerData: PlayerData[]) {
     const PlayerControllers = get("Tank");
 
     allPlayerData.map((playerData) => {
         const playerUserId: string | undefined = playerData.userId?.toString();
 
-        if (playerUserId) {
-            let tankData: Tank = PlayerControllers.find((playerController) => playerData.userId == playerController.data.userId)?.data || new Tank(`Player_${playerData.userId}`, playerData.userId);
+        if (playerUserId && playerData.alive) {
+            let tankData: Tank = PlayerControllers.find((playerController) => playerData.userId == playerController.data.userId)?.data || new Tank(`Player_${playerData.userId}`, playerData.index, parseInt(playerData?.userId));
 
             if (playerData.userId != localClientTank.userId && playerData?.position?.x) {
+                if (playerData.powerup) {
+                    tankData.bullet = playerData.powerup.class
+                }
+
                 tween(tankData.controller.pos, vec2(playerData.position.x, playerData.position.y), .15, (p) => tankData.controller.pos = p, easings.linear)
                 tankData.controller.angle = playerData.angle
-
+                
                 const turretData: Turret = tankData.turretData
                 const mousePos: any = playerData.mousePos
                 turretData.updateController(mousePos, vec2(playerData.position.x, playerData.position.y));
             }
+        }
+
+        if (playerData.userId == localClientUserId) {
+            localClientData = playerData
         }
     })
 
@@ -188,13 +275,22 @@ socket.on("update-player-data", (allPlayerData: PlayerData[]) => {
     PlayerControllers.map((playerController) => {
         const playerData: PlayerData | undefined = allPlayerData.find((playerData) => playerController.data.userId == playerData.userId)
         
-        if ((!playerData || !playerData.alive) && !playerController.is("LocalClient")) {
+        if (!playerData || playerData?.alive == false) {
             destroy(playerController.data?.turretData.controller)
             destroy(playerController.data?.turretData.controllerOutline)
             destroy(playerController)
         };
     })
-})
+}
+
+function collectPowerup(data: any) {
+    if (data.powerup) {
+        localClientTank.bullet = data.powerup.class
+    }
+}
+
+socket.on("update-player-data", updatePlayerData);
+socket.on("collect-powerup", collectPowerup)
 
 //Update Powerups
 socket.on("update-powerups", (PowerupsData: Powerup[]) => {
@@ -204,7 +300,7 @@ socket.on("update-powerups", (PowerupsData: Powerup[]) => {
         const powerup: Powerup = allPowerups.find((powerup) => powerupData.id == powerup.data.id)?.data
 
         if (!powerup) { //if powerup doesnt exist on map, add it
-            powerupData = new Powerup(powerupData.name, powerupData.pos,powerupData.id) //create new "Powerup" type locally. this way it will include functions
+            powerupData = new Powerup(powerupData) //create new "Powerup" type locally. this way it will include functions
         }
     })
 
@@ -228,10 +324,6 @@ socket.on("shoot-projectile", (data: any) => {
     });
 })
 
-socket.on("collect-powerup", (data: any) => {
-    console.log("collected ", data.powerup)
-})
-
 //when bullet collides with tank
 onCollide("Tank", "Projectile", (tankObj: GameObj, projectileObj: GameObj) => {
     const tank: Tank = tankObj.data
@@ -242,6 +334,10 @@ onCollide("Tank", "Projectile", (tankObj: GameObj, projectileObj: GameObj) => {
     }
 })
 
+onCollide("Projectile", "Collider", (projectileObj: GameObj) => {
+    destroy(projectileObj)
+})
+
 //when tank collied with powerup
 onCollide("Tank", "Powerup", (tankObj: GameObj, powerupObj: GameObj) => {
     const tank: Tank = tankObj.data
@@ -249,7 +345,20 @@ onCollide("Tank", "Powerup", (tankObj: GameObj, powerupObj: GameObj) => {
     
     if (tank.userId == localClientUserId) {
         socket.emit("collect-powerup", {
-            powerup: powerup
+            powerup: powerup.powerupData
+        })
+    }
+})
+
+//when tank collied with killer
+onCollide("Tank", "Killer", (tankObj: GameObj) => {
+    const tankData: Tank = tankObj.data
+    
+    if (tankData.userId == localClientUserId) {
+        debug.log("I'm dead")
+        socket.emit("kill-tank", {
+            senderUserId: tankData.userId,
+            recieverUserId: tankData.userId
         })
     }
 })
@@ -299,6 +408,7 @@ onUpdate("Tank", (tankObj: GameObj) => {
     } 
 })
 
+
 add([
     sprite("Ground"),
     "Ground",
@@ -339,8 +449,16 @@ add([
 ])
 
 // Send player data - Server
-setInterval(() => {
+let i = setInterval(() => {
     const playerData = localClientTank.exportData();
     socket.emit("send-player-data", playerData);
 }, 1000 / 20)
+
+onSceneLeave(() => {
+    clearInterval(i)
+    changedScene = true
+
+    socket.off('update-player-data', updatePlayerData)
+    socket.off("collect-powerup", collectPowerup)
+})
 }

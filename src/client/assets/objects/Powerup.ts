@@ -9,22 +9,26 @@ export class Powerup {
   name: string;
   pos: Vec2;
   id: number;
+  img: string;
+  powerupData: Powerup;
 
-  constructor(name: string, position: Vec2, id: number) {
-    let powerup = Powerups.find((Powerup) => Powerup.name == name)
-
+  constructor(powerupData: Powerup) {
+    let powerup = Powerups.find((Powerup) => Powerup.name == powerupData.name)
+ 
     if (powerup) {
-      this.name = name
-      this.pos = position
-      this.id = id
+      this.name = powerupData.name
+      this.pos = powerupData.position
+      this.id = powerupData.id
+      this.img = powerupData.img
+      this.powerupData = powerupData
     }
 
     add([
       "Powerup",
-      `${this.name}_${this.id}`, //BANANA_12345
+      `${powerupData.name}_${powerupData.id}`, //BANANA_12345
       anchor("center"),
       area(),
-      pos(vec2(this.pos.x, this.pos.y)),
+      pos(vec2(powerupData.pos.x, powerupData.pos.y)),
       sprite("PowerupOrb"),
       {
         data: this

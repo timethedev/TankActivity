@@ -5,7 +5,9 @@ import { Vec2, generateId } from "../server/main";
 
 export class Powerup {
   name: string;
+  img: string;
   pos: Vec2;
+  class: string;
   id: number | undefined;
 
   constructor(mapId: number) {
@@ -13,6 +15,9 @@ export class Powerup {
     let randomPos = randomPositionInsidePolygon(Maps[mapId].polygon.map((p) => { return [p.x, p.y]; }));
 
     this.name = randomPowerup.name;
+    this.img = randomPowerup.img;
+    this.class = randomPowerup.class;
+
     if (randomPos) {
       this.pos = {
         x: randomPos[0],

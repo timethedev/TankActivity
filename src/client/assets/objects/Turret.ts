@@ -4,10 +4,10 @@ import "kaboom/global";
 import { Tank } from "./Tank";
 
 class Turret {
-    constructor (tank: Tank, userTag: string) {
+    constructor (tank: Tank, userTag: string, tankColor: string) {
         this.tank = tank;
         this.controller = add([
-            sprite("RedTurret"),
+            sprite(`${tankColor}Turret`),
             anchor("right"),
             pos(center()),
             scale(0.8),
@@ -19,7 +19,7 @@ class Turret {
             { data: this },
         ]);
         this.controllerOutline = add([
-            sprite("RedTurretOutline"),
+            sprite("TurretOutline"),
             anchor("right"),
             pos(center()),
             scale(0.8),

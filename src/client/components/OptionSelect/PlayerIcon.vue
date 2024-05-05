@@ -18,7 +18,7 @@
     height:2.35vw;
     width:2.35vw;
     border: .1vw solid white;
-    border-radius:50px;
+    border-radius:100vw;
   }
 </style>
 

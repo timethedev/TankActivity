@@ -10,14 +10,14 @@
 </script>
 
 <template>
-  <img class="playerIcon" :src="getAvatar(member)"/>
+  <img class="playerIcon" :src="getAvatar(member.user)"/>
 </template>
 
 <style scoped>
   .playerIcon {
     height:4.75vw;
     width:4.75vw;
-    border-radius:50px;
+    border-radius:100vw;
   }
 </style>
 

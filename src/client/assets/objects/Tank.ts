@@ -22,9 +22,19 @@ interface UserInput {
 }
 
 class Tank {
-    constructor (userTag: string, userId: number | undefined) {
+    constructor (userTag: string, index: number, userId: number | undefined) {
+        let tankColor: string = "Red";
+
+        if (index == 1) {
+            tankColor = "Yellow"
+        } else if (index == 2) {
+            tankColor = "Green"
+        } else if (index == 3) {
+            tankColor = "Blue"
+        }
+
         this.controller = add([
-            sprite("RedTank"),
+            sprite(`${tankColor}Tank`),
             anchor("center"),
             pos(width()/2, height()/2),
             area(),
@@ -35,6 +45,7 @@ class Tank {
             {
                 data: this,
             },
+            body({ mass: .05 })
         ])
 
         let shadow: GameObj = add([
@@ -52,7 +63,7 @@ class Tank {
             destroy(shadow)
         })
 
-        this.turretData = new Turret(this, userTag);
+        this.turretData = new Turret(this, userTag, tankColor);
         this.userId = userId;
     }
 
@@ -80,9 +91,9 @@ class Tank {
         const turnInput = userInput.left + userInput.right;
         const moveInput = userInput.up + userInput.down;
 
-        const acceleration = 4;
-        const deacceleration = 3;
-        const maxSpeed = 5;
+        const acceleration = 6;
+        const deacceleration = 6;
+        const maxSpeed = 6;
         const turnSpeed = 180;
 
         tankData.speed += moveInput * acceleration * dt();

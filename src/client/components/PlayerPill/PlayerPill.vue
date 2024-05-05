@@ -5,18 +5,24 @@
   import { defineProps, ref, watch } from 'vue'
 
   const props = defineProps({
-    members: Array
+    members: Array,
+    spectating: Boolean
   })
   
   const members = ref(props.members)
+  const spectating = ref(props.spectating)
 
   watch(() => props.members, (m) => {
     members.value = m;
   });
+
+  watch(() => props.spectating, (s) => {
+    spectating.value = s;
+  });
 </script>
 
 <template>
-  <div class="playerPill">
+  <div :class="`playerPill ${spectating && 'spectating'}`">
     <PlayerIcon v-for="member in members" :key="member" :member="member"/>
     <InviteButton/>
   </div>
@@ -35,6 +41,11 @@
 
     display:flex;
     gap:.5vw;
+  }
+
+  .playerPill.spectating {
+    z-index:8;
+    height:min-content;
   }
 </style>
 

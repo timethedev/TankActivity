@@ -70,8 +70,8 @@ class IceProjectile extends Projectile {
 class FireProjectile extends Projectile {
     constructor (tank: Tank, originPosition: Vec2, angle: number) {
         super(tank, originPosition, angle)
-        this.controller.wait(0.2, () =>{
-            let l = loop(0.2, () =>{
+        this.controller.wait(0.25, () =>{
+            let l = loop(0.25, () =>{
                 if (this.controller) new Fire (this, this.controller.pos);
             })
 

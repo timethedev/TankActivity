@@ -10,6 +10,7 @@ const canvas: any = document.querySelector("#kaboomCanvas")
 
 let current = "wait"
 let mapId: number;
+let spawnpoint: any;
 
 function setup(socket: any) {
     canvas.classList.add("hidden")
@@ -24,12 +25,13 @@ function setup(socket: any) {
         canvas: canvas,
     })
 
-    scene("game", (() => game(socket, mapId, getAuth())))
+    scene("game", (() => game(socket, mapId, spawnpoint, getAuth())))
     scene("wait", (() => wait()))
 }
 
-function showGame(mId: number) {
+function showGame(mId: number, sPoint: any) {
     mapId = mId;
+    spawnpoint = sPoint;
     
     canvas.classList.remove("hidden")
     go("game")
@@ -43,8 +45,13 @@ function showGame(mId: number) {
 
 function hideGame() {
     canvas.classList.add("hidden")
-    current = "wait"
     go("wait")
+    current = "wait"
+
+    let i = setInterval(() => {
+        canvas.blur()
+        if (current != "wait") clearInterval(i)
+    }, 1000)
 }
 
 export default setup;
