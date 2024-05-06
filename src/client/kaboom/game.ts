@@ -8,6 +8,7 @@ import { PlayerData } from "../../data-structures/PlayerData";
 import { Turret } from "../assets/objects/Turret";
 import { Powerup } from "../assets/objects/Powerup"
 import Maps from "../../common/Maps";
+import { Sound } from "../assets/SoundManager";
 
 
 
@@ -95,8 +96,13 @@ onUpdate("Projectile", (projectileController: GameObj) => { // Use Projectile ty
 onKeyPress("space", () => { // Shoot projectile
     if (!reloading) {
         localClientTank.shoot(socket)
+
+        const shootSound = new Sound("/sounds/explosion.wav");
+        shootSound.globalPlay(localClientUserId, socket, 1, 0.7);
     } else {
         shake(2)
+        const shootAttemptSound = new Sound("/sounds/invalid-shoot.wav");
+        shootAttemptSound.localPlay(0.6);
     }
 });
 
@@ -326,10 +332,19 @@ socket.on("shoot-projectile", (data: any) => {
 
         if (Tank.userId == data.userId && data.userId != localClientUserId) {
             shake(3)
+
             new stringToBullet[Tank.bullet] (Tank, playerController.pos, Tank.turretData.angle);
         }
     });
 })
+
+
+
+
+
+
+
+
 
 //when bullet collides with tank
 onCollide("Tank", "Projectile", (tankObj: GameObj, projectileObj: GameObj) => {
@@ -346,6 +361,9 @@ onCollide("Tank", "Projectile", (tankObj: GameObj, projectileObj: GameObj) => {
 })
 
 onCollide("Projectile", "Collider", (projectileObj: GameObj) => {
+    const explosionSound = new Sound("/sounds/explosion.wav");
+    explosionSound.localPlay(0.6);
+
     destroy(projectileObj)
 })
 
@@ -355,6 +373,9 @@ onCollide("Tank", "Powerup", (tankObj: GameObj, powerupObj: GameObj) => {
     const powerup: Powerup = powerupObj.data
     
     if (tank.userId == localClientUserId) {
+        const grabPowerUpSound = new Sound("/sounds/grab-powerup.mp3");
+        grabPowerUpSound.localPlay(1);
+
         socket.emit("collect-powerup", {
             powerup: powerup.powerupData
         })
@@ -366,6 +387,9 @@ onCollide("Tank", "Killer", (tankObj: GameObj) => {
     const tankData: Tank = tankObj.data
     
     if (tankData.userId == localClientUserId) {
+        const explosionSound = new Sound("/sounds/explosion.wav");
+        explosionSound.globalPlay(tankData.userId, socket, 1, 0.2);
+        
         socket.emit("kill-tank", {
             senderUserId: tankData.userId,
             recieverUserId: tankData.userId

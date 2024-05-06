@@ -12,6 +12,7 @@ import { PlayerData } from "../data-structures/PlayerData";
 import { Powerup } from "../data-structures/Powerup";
 import { User } from "../data-structures/User";
 import Maps from "../common/Maps";
+import { GlobalSoundData } from "../client/assets/SoundManager";
 
 dotenv.config({ path: ".env" });
 const app = express();
@@ -592,6 +593,10 @@ io.on('connection', (socket) => {
       room.removePlayer(userId);
     }
   });
+
+  socket.on("play-sound", (data: GlobalSoundData) =>{
+    socket.emit("play-sound", data);
+  })
 });
 
 ViteExpress.bind(app, server);
