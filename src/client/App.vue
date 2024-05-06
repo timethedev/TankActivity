@@ -134,7 +134,7 @@ h1.spectating  {
   transform: translateX(-50%);
   z-index:8;
 
-  font-family: "Fredoka", sans-serif;
+  font-family: "Fredoka Variable", sans-serif;
   padding:0;
   margin:0;
   text-align: center;

@@ -58,19 +58,12 @@ loadSprite("PowerupOrb", "src/client/assets/sprites/PowerupOrb.png")
 loadSprite("Sea", "src/client/assets/sprites/Sea.png")
 
 
-/* debug.inspect = true */
+
 
 
 function distance(pos1: Vec2, pos2: Vec2): number {
     return Math.sqrt((pos1.x - pos2.x) ** 2 + (pos1.y - pos2.y) ** 2);
 }
-
-
-
-
-
-
-
 
 
 // GAMEOBJECT BEHAVIOUR
@@ -103,7 +96,7 @@ onKeyPress("space", () => { // Shoot projectile
     if (!reloading) {
         localClientTank.shoot(socket)
     } else {
-        shake(.5)
+        shake(2)
     }
 });
 
@@ -123,6 +116,9 @@ if (!CAM) {
     onKeyPress("enter", () => {
         downloadJSON("polygons.json", allPolygons)
     })
+    onKeyPress("escape", () => {
+        allPolygons = []
+    })
 }
 
 let map = Maps[mapId]
@@ -131,6 +127,10 @@ let spawnPos = index >= 0 ? vec2(map.spawns[index][0], map.spawns[index][1]) : v
 let mapPolygon = {
     adjusted: map.polygon.map((point) => {return vec2(Math.ceil((point.x-(width()/2))/1.5), Math.ceil((point.y-(height()/2))/1.5))}),
     unadjusted: map.polygon.map((point) => { return vec2(Math.ceil(point.x), Math.ceil(point.y))})
+}
+
+function adjustPolygon(polygon: any) {
+    return polygon.map((point: any) => {return vec2(Math.ceil((point.x-(width()/2))/1.5), Math.ceil((point.y-(height()/2))/1.5))})
 }
 
 
@@ -158,17 +158,23 @@ map.details.forEach((detail) => {
     if (detail.rot) comps.push(rotate(detail.rot))
     if (detail.pos) comps.push(pos(detail.pos.x, detail.pos.y))
     if (detail.kill) comps.push("Killer")
+    if (detail.scale) comps.push(scale(detail.scale))
+    if (detail.z) comps.push(z(detail.z))
 
     if (detail.collider) {
         if (!detail.kill) {
             comps.push(body({ isStatic: true }))
             comps.push("Collider")
+        } else {
+            comps.push(z(-15))
+            comps.push(anchor("center"))
+            comps.push(pos(width()/2, height()/2))
         }
 
         if (detail.collider == "area") {
             comps.push(area())
         } else {
-            comps.push(area({shape: new Polygon(detail.collider)}))
+            comps.push(area({shape: new Polygon(adjustPolygon(detail.collider))}))
         }
     }
     
@@ -276,6 +282,7 @@ function updatePlayerData(allPlayerData: PlayerData[]) {
         const playerData: PlayerData | undefined = allPlayerData.find((playerData) => playerController.data.userId == playerData.userId)
         
         if (!playerData || playerData?.alive == false) {
+            shake(2)
             destroy(playerController.data?.turretData.controller)
             destroy(playerController.data?.turretData.controllerOutline)
             destroy(playerController)
@@ -332,6 +339,10 @@ onCollide("Tank", "Projectile", (tankObj: GameObj, projectileObj: GameObj) => {
     if (localClientUserId == projectile.tank.userId && localClientUserId != tank.userId) {
         tank.kill(socket, projectile.tank)
     }
+
+    if (localClientUserId == tank.userId && tank.userId != projectile.tank.userId) {
+        tank.kill(socket, projectile.tank)
+    }
 })
 
 onCollide("Projectile", "Collider", (projectileObj: GameObj) => {
@@ -355,7 +366,6 @@ onCollide("Tank", "Killer", (tankObj: GameObj) => {
     const tankData: Tank = tankObj.data
     
     if (tankData.userId == localClientUserId) {
-        debug.log("I'm dead")
         socket.emit("kill-tank", {
             senderUserId: tankData.userId,
             recieverUserId: tankData.userId
@@ -399,8 +409,6 @@ onUpdate("Tank", (tankObj: GameObj) => {
     if (!insidePolygon && !dead && tankData.userId == localClientUserId) {
         dead = true
 
-        debug.log("I died!")
-        
         socket.emit("kill-tank", {
             senderUserId: tankData.userId,
             recieverUserId: tankData.userId

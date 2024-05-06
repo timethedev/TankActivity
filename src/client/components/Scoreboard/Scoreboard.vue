@@ -44,7 +44,7 @@
 <style scoped>
   .scoreboardContainer * {
 
-    font-family: "Fredoka", sans-serif;
+    font-family: "Fredoka Variable", sans-serif;
   }
 
   .scoreboardContainer {

@@ -8,6 +8,7 @@
     "build": "vite build"
   },
   "devDependencies": {
+    "@flydotio/dockerfile": "^0.5.7",
     "@types/express": "^4.17.15",
     "@types/node": "^20.12.7",
     "nodemon": "^3.0.1",
@@ -15,6 +16,10 @@
   },
   "dependencies": {
     "@discord/embedded-app-sdk": "^1.2.0",
+    "@fontsource-variable/fredoka": "^5.0.13",
+    "@fontsource/fredoka": "^5.0.13",
+    "@fontsource/fredoka-one": "^5.0.5",
+    "@fontsource/open-sans": "^5.0.28",
     "@vitejs/plugin-vue": "^5.0.4",
     "cross-env": "^7.0.3",
     "dotenv": "^16.4.5",

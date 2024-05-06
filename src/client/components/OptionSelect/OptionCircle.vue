@@ -97,7 +97,7 @@
 }
 
 h1 {
-  font-family: "Fredoka", sans-serif;
+  font-family: "Fredoka Variable", sans-serif;
   -webkit-text-stroke-width: .5vw;
   -webkit-text-stroke-color: black;
   paint-order: stroke fill;
