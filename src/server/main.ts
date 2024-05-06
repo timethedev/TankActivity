@@ -66,9 +66,9 @@ class Player {
   socket: Socket;
   powerup: Powerup;
   mousePos: Vec2;
-  spectating: boolean = false;
+  spectating: boolean = true;
   user: User;
-  wins: number;
+  wins: number = 0;
   index: number;
 
   ammo: number = 3;
@@ -160,6 +160,7 @@ class Options {
 
         const intervalId = setInterval(() => {
           let highestOption = {option: {}, votes: 0}
+          let totalVotes: number = 0;
 
           this.options.forEach((option) => {
             if (option.members.length >= highestOption.votes) {
@@ -167,10 +168,12 @@ class Options {
                 option: option,
                 votes: option.members.length
               }
+              
+              totalVotes += option.members.length
             }
           })
 
-          if (highestOption.votes != 0) {
+          if (highestOption.votes != 0 && totalVotes >= 2) {
             this.timer -= 1;
             this.counting = true
           } else {
@@ -195,7 +198,7 @@ class Options {
     return new Promise(async (resolve) => {
       let firstOption: Option | any = await this.createOption(
         "VOTE!", 
-        "Select a game mode to join the game!", 
+        "Select a game mode to join the game! (2p minimum)", 
         [ new Option("WIP", "wip"), new Option("Classic", "classic"), new Option("Random", "random") ]
       )
 
@@ -203,8 +206,8 @@ class Options {
 
       let secondOption: Option | any = await this.createOption(
         "VOTE!", 
-        "Select a round duration to join the game!",
-        [ new Option("2 rounds", 2), new Option("3 rounds", 3), new Option("6 rounds", 6) ]
+        "Select a round duration to join the game! (2p minimum)",
+        [ new Option("1 round", 1), new Option("3 rounds", 3), new Option("6 rounds", 6) ]
       )
 
       if (!secondOption) return;
@@ -387,20 +390,16 @@ class Room {
 
     this.gameInProgress = true
     
-    console.log("playing members: ")
     //remove spectating from all playing members
     this.options.options.forEach((o) => {
       o.members.forEach((m) => {
         this.players.forEach((p: Player) => {
           if (m.id == p.userId) {
-            console.log(p.userId, p.spectating)
-            
             p.spectating = false
           }
         })
       })
     })
-    console.log("----")
 
     this.options.originalRounds = this.options.selected.rounds;
     this.options.actualRounds = this.options.originalRounds;
@@ -415,7 +414,6 @@ class Room {
       let totalPlayers: Player[] = [];
       //only add players who aren't spectating
       this.players.forEach((p: Player) => {
-        console.log(p.userId, p.spectating)
         if (!p.spectating) {
           totalPlayers.push(p)
         } else {
