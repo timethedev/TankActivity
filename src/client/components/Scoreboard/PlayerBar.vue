@@ -16,10 +16,10 @@
   })
 
   watch(() => props.playerData, (allPlayerData) => {
-    let pData = allPlayerData.find((pData) => pData.userId == props.member.userId)
+    let pData = allPlayerData?.find((pData: any) => pData.userId == props.member?.userId)
     
-    if (pData) {
-      if (pData.wins != props.member.wins) {
+    if (pData && props.member) {
+      if (pData.wins != props.member.wins || pData.spectating != props.member.spectating) {
         member.value = pData
       }
     } 
@@ -27,7 +27,7 @@
 </script>
 
 <template>
-  <div class="playerBar">
+  <div v-if="(member.spectating == false)" class="playerBar">
     <img class="playerIcon" :src="getAvatar(member.user)"/>
     <p class="username">{{ member.user.username }}</p>
     <p class="score">{{member.wins || 0}}/{{rounds}}</p>
