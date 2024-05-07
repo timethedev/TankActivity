@@ -35,7 +35,7 @@ const stringToBullet: any = {
     "IceProjectile": IceProjectile
 };
 
-loadSprite("Bullet", "src\\client\\assets\\sprites\\Bullet.png")
+loadSprite("Bullet", "/assets/Bullet.png")
 
 loadSprite("RedTank", "/tanks/red/Tank.png")
 loadSprite("RedTurret", "/tanks/red/Turret.png")
@@ -53,10 +53,9 @@ loadSprite("TurretOutline", "/tanks/TurretOutline.png")
 
 
 loadSprite("Fire", `/assets/fire.png`)
-loadSprite("PowerupOrb", "src/client/assets/sprites/PowerupOrb.png")
+loadSprite("PowerupOrb", "/assets/PowerupOrb.png")
 
-/* loadSprite("Collisions", "src\\client\\assets\\sprites\\Map-test\\collisions.png") */
-loadSprite("Sea", "src/client/assets/sprites/Sea.png")
+loadSprite("Sea", "/assets/Sea.png")
 
 
 

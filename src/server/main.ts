@@ -507,16 +507,19 @@ io.on('connection', (socket) => {
   let room: Room;
   let auth: any;
   let user: User;
+  let channelId: number;
   let localPlayer: Player | undefined;
 
   console.log(`[${getTime()}] (${socket.id}): User has connected.`);
 
   socket.on('join-room', (data) =>{
     auth = data.auth;
+    channelId = data.channelId;
     user = auth.user;
 
+
     userId = user.id;
-    room = new Room(123456789, user, socket);
+    room = new Room(channelId, user, socket);
     localPlayer = room.getPlayer(userId);
 
     if (room.gameInProgress) room.spectate(localPlayer)

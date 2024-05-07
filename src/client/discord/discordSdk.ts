@@ -1,5 +1,5 @@
 import { DiscordSDKMock, DiscordSDK } from '@discord/embedded-app-sdk';
-const discordSdk = new DiscordSDKMock(import.meta.env.VITE_DISCORD_CLIENT_ID, "1928", "38393");
+const discordSdk = new DiscordSDK(import.meta.env.VITE_DISCORD_CLIENT_ID, "1928", "38393");
 
 let auth: any;
 
@@ -14,7 +14,7 @@ async function setupDiscordSdk() {
         response_type: 'code',
         state: '',
         prompt: 'none',
-        scope: ['identify'],
+        scope: ['identify', 'guilds'],
     });
 
     // Retrieve an access_token from your application's server

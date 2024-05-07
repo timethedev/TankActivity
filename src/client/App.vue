@@ -88,9 +88,17 @@
       setTimeout(() => loaded.value = true, 2500)
 
       //Join Room - Server
-      socket.emit("join-room", {
-          auth: auth
-      });
+
+      discordSdk.commands.getChannel({
+        channel_id: discordSdk.channelId,
+      }).then((channel) => {
+        if (channel.id) {
+          socket.emit("join-room", {
+            auth: auth,
+            channelId: channel.id
+          });
+        }
+      })
     })
   })
 
