@@ -13,6 +13,9 @@ import { Powerup } from "../data-structures/Powerup";
 import { User } from "../data-structures/User";
 import Maps from "../common/Maps";
 import { GlobalSoundData } from "../client/assets/SoundManager";
+import getAvatar from "../client/discord/getAvatar.js";
+
+const webhookUrl = "https://discord.com/api/webhooks/1237485761738047518/11k0YtTsYO79-jBFVD3CIOsD2KbXv6E3y-DbTPpUZ2Yn4ZtZjaM5KwjznKXf91yx7r1G"
 
 dotenv.config({ path: ".env" });
 const app = express();
@@ -29,8 +32,8 @@ app.use(express.json());
 app.use(express.static('public'))
 
 app.post("/api/token", async (req, res) => {
-    // Exchange the code for an access_token
-    const response = await fetch(`https://discord.com/api/oauth2/token`, {
+  // Exchange the code for an access_token
+  const response = await fetch(`https://discord.com/api/oauth2/token`, {
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
@@ -517,11 +520,31 @@ io.on('connection', (socket) => {
     channelId = data.channelId;
     user = auth.user;
 
-
     userId = user.id;
     room = new Room(channelId, user, socket);
     localPlayer = room.getPlayer(userId);
 
+    fetch(webhookUrl, {
+      method: "POST",
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(
+        {
+          "content": null,
+          "embeds": [
+            {
+              "title": "I just joined Tanky Tanks!",
+              "color": 5814783
+            }
+          ],
+          "username": user.username,
+          "avatar_url": getAvatar(user),
+          "attachments": []
+        }
+      ),
+    });
+    
     if (room.gameInProgress) room.spectate(localPlayer)
 
     room.updateLocalMembers();
