@@ -6,14 +6,19 @@
     })
 
     const loaded = ref(props.loaded)
+    const firstLoad = ref(false)
 
     watch(() => props.loaded, (l) => {
         loaded.value = l
+
+        if (loaded.value == true) {
+            firstLoad.value = true
+        }
     })
 </script>
 
 <template>
-  <div :class="`loadingScreen ${loaded && 'hidden'}`">
+  <div :class="`loadingScreen ${loaded == true && 'hidden'} ${firstLoad && 'loading'}`">
     <img class="logo" :src="'/assets/logo.png'"></img>
     <span class="loader"></span>
     <img class="controls" :src="'/assets/controls.svg'"></img>
@@ -39,6 +44,14 @@
         transition:.25s ease;
     }
 
+    .loadingScreen.loading .logo {
+        display:none;
+    }
+
+    .loadingScreen.loading .controls {
+        display:none;
+    }
+
     .loadingScreen.hidden {
         opacity:0;
         pointer-events:none;
@@ -56,7 +69,7 @@
         bottom:5vw;
         left:50%;
         transform: translateX(-50%);
-        width:26vw;
+        width:35vw;
     }
 
     .loader {

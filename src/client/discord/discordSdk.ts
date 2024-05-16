@@ -1,5 +1,14 @@
 import { DiscordSDKMock, DiscordSDK } from '@discord/embedded-app-sdk';
-const discordSdk = new DiscordSDK(import.meta.env.VITE_DISCORD_CLIENT_ID, "1928", "38393");
+let discordSdk: DiscordSDK | DiscordSDKMock;
+
+const queryParams = new URLSearchParams(window.location.search);
+const isEmbedded = queryParams.get('frame_id') != null;
+
+if (isEmbedded) {
+    discordSdk = new DiscordSDK(import.meta.env.VITE_DISCORD_CLIENT_ID);
+} else {
+    discordSdk = new DiscordSDKMock(import.meta.env.VITE_DISCORD_CLIENT_ID, "1928", "38393");
+}
 
 let auth: any;
 
@@ -14,7 +23,7 @@ async function setupDiscordSdk() {
         response_type: 'code',
         state: '',
         prompt: 'none',
-        scope: ['identify', 'guilds'],
+        scope: ['identify', 'guilds', 'rpc.voice.read'],
     });
 
     // Retrieve an access_token from your application's server

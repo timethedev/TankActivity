@@ -7,13 +7,15 @@ export interface GlobalSoundData {
     volume: number
 }
 
-function playAudio(audioUrl: string, volume: number) {
+function playAudio(audioUrl: string, volume: number, loop: boolean) {
     var audio = new Audio(audioUrl);
-    console.log(audio, audioUrl)
     audio.volume = volume;
+    if (loop) audio.loop = true
+
     audio.play();
+
+    return audio
 }
-  
 
 export class Sound {
     constructor (id: string) {
@@ -21,9 +23,16 @@ export class Sound {
     }
 
     id: string;
+    audio: any;
+    originalVolume: number = 0;
 
-    localPlay(volume: number) {
-        playAudio(this.id, volume);
+    localPlay(volume: number, loop:boolean) {
+        this.originalVolume = volume;
+        this.audio = playAudio(this.id, volume, loop); 
+    }
+
+    mute(mute: boolean) {
+        this.audio.volume = mute ? 0 : this.originalVolume
     }
 
     globalPlay(userId: number | string | undefined, socket: Socket, volume: number, globalOffset: number) {

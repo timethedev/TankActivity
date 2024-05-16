@@ -24,7 +24,7 @@
 
 <template>
   <div :class="`optionCircleCont ${scaledClass}`">
-    <div class="optionCircle" @click="handleClick">
+    <div class="optionCircle" @click="handleClick" v-hover-sound>
       <div class="playerList">
         <PlayerIcon v-for="member in option.members" :key="member" :member="member"/>
       </div>

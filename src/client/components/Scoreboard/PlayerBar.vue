@@ -1,6 +1,10 @@
 <script setup lang="ts">
+  import Orb from "./Orb.vue";
   import getAvatar from '../../discord/getAvatar';
+  import getUsername from '../../discord/getUsername';
+
   import { defineProps, ref, watch } from 'vue'
+
 
   const props = defineProps({
     member: Object,
@@ -10,16 +14,15 @@
   
   const member = ref(props.member)
   const rounds = ref(props.rounds)
-  
+
   watch(() => props.rounds, (r) => {
     rounds.value = r
   })
-
   watch(() => props.playerData, (allPlayerData) => {
     let pData = allPlayerData?.find((pData: any) => pData.userId == props.member?.userId)
     
     if (pData && props.member) {
-      if (pData.wins != props.member.wins || pData.spectating != props.member.spectating) {
+      if (pData.wins != props.member.wins || pData.spectating != props.member.spectating || pData.winPattern != props.member.winPattern) {
         member.value = pData
       }
     } 
@@ -28,8 +31,11 @@
 
 <template>
   <div v-if="(member.spectating == false)" class="playerBar">
-    <img class="playerIcon" :src="getAvatar(member.user)"/>
-    <p class="username">{{ member.user.username }}</p>
+    <img crossOrigin="anonymous" class="playerIcon" :src="getAvatar(member.user)" ref="image"/>
+    <p class="username">{{ getUsername(member.user) }}</p>
+    <div class="orbContainer">
+      <Orb v-for="win in member.winPattern" :key="win" :win="win"/>
+    </div>
     <p class="score">{{member.wins || 0}}/{{rounds}}</p>
   </div>
 </template>
@@ -37,10 +43,23 @@
 <style scoped>
   .playerBar {
     display:flex;
-    width:27vw;
     height:3.5vw;
     gap:1.3vw;
     align-items:center;
+    border-radius:1vw;
+  }
+
+  .playerBar * {
+    color: white;
+  }
+  .orbContainer {
+    flex:1;
+    display:flex;
+    height:100%;
+    gap:.25vw;
+    justify-content:center;
+    align-items:center;
+    padding: 0 .5vw;
   }
 
   .playerBar:not(:last-child) {
@@ -49,7 +68,7 @@
 
   .username {
     font-size:1.2vw;
-    flex:1;
+    flex:.6;
   }
 
   .score {

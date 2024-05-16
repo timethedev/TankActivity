@@ -7,7 +7,7 @@
 </script>
 
 <template>
-  <div class="inviteButton" @click="handleClick">
+  <div class="inviteButton" v-hover-sound @click="handleClick">
     +
   </div>
 </template>

@@ -13,6 +13,8 @@ export interface PlayerData {
   index: number;
   ammo: number;
   reloading: boolean;
+  speaking: boolean;
+  winPattern: number[];
 }
 
 

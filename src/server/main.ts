@@ -15,6 +15,12 @@ import Maps from "../common/Maps";
 import { GlobalSoundData } from "../client/assets/SoundManager";
 import getAvatar from "../client/discord/getAvatar.js";
 
+import { dirname, join } from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
 const webhookUrl = "https://discord.com/api/webhooks/1237485761738047518/11k0YtTsYO79-jBFVD3CIOsD2KbXv6E3y-DbTPpUZ2Yn4ZtZjaM5KwjznKXf91yx7r1G"
 
 dotenv.config({ path: ".env" });
@@ -28,8 +34,45 @@ const io = new Server(server);
 
 // Allow express to parse JSON bodies
 app.use(express.json());
-
 app.use(express.static('public'))
+
+let viteReady = false
+let launched = false
+
+//handle loading of applicaiton, without this it will simply say Cannot get '/' until it finally can.
+app.get("/", (req: any, res: any, next: any) => {
+  if (!launched) {
+    launched = true;
+
+    const url = req.protocol + "://" + req.get("host") + "/game"
+
+    const i = setInterval(() => {
+      (async () => {
+        fetch(url).then(async (response) => {
+          const text = await response.text();
+          const isLoading = text.toLowerCase().includes("cannot get /")
+  
+          if (isLoading == false) viteReady = true
+        })
+        .catch(() => {
+          console.log("An error occured!")
+        })
+
+        if (viteReady) {
+          clearInterval(i)
+        }
+      })()
+    }, 1000)
+  }
+
+  if (viteReady) {
+    next()
+  } else {
+    setTimeout(() => {
+      res.sendFile(join(__dirname, 'loading.html')); 
+    }, 1000)
+  }
+});
 
 app.post("/api/token", async (req, res) => {
   // Exchange the code for an access_token
@@ -74,6 +117,8 @@ class Player {
   user: User;
   wins: number = 0;
   index: number;
+  speaking: boolean;
+  winPattern: boolean[];
 
   ammo: number = 3;
   reloading: boolean;
@@ -115,7 +160,9 @@ class Player {
       spectating: this.spectating,
       index: this.index,
       ammo: this.ammo,
-      reloading: this.reloading
+      reloading: this.reloading,
+      speaking: this.speaking,
+      winPattern: this.winPattern
     }
   }
 }
@@ -148,6 +195,7 @@ class Options {
   mapId:number;
   originalRounds: number;
   actualRounds: number;
+  currentRound: number = 0;
 
   constructor(room: Room) {
     this.room = room
@@ -283,6 +331,7 @@ class Room {
           //add win to player if won a round
           if (alivePlayers[0]) {
             alivePlayers[0].wins += 1
+            if (this.options.currentRound <= this.options.originalRounds) alivePlayers[0].winPattern[this.options.currentRound-1] = true
           }
 
           io.to(this.channelId.toString()).emit("toggle-scoreboard", true)
@@ -394,21 +443,24 @@ class Room {
 
     this.gameInProgress = true
     
+    this.options.originalRounds = this.options.selected.rounds;
+    this.options.actualRounds = this.options.originalRounds;
+
     //remove spectating from all playing members
     this.options.options.forEach((o) => {
       o.members.forEach((m) => {
         this.players.forEach((p: Player) => {
           if (m.id == p.userId) {
             p.spectating = false
+            p.winPattern = new Array(this.options.originalRounds).fill(false); //create an array filled n times with false
           }
         })
       })
     })
 
-    this.options.originalRounds = this.options.selected.rounds;
-    this.options.actualRounds = this.options.originalRounds;
-
     for (let i = 0; i < this.options.actualRounds; i++) {
+      this.options.currentRound += 1;
+
       let roundEnded: boolean = false;
       this.options.mapId = Math.floor(Math.random() * Maps.length);
 
@@ -443,8 +495,8 @@ class Room {
       })
 
 
-      let i: any = setInterval(() => {
-        if (this.deleted || roundEnded) clearInterval(i);
+      let x: any = setInterval(() => {
+        if (this.deleted || roundEnded) clearInterval(x);
         if (this.powerups.length < 3) {
           const powerup = new Powerup(this.options.mapId)
           this.powerups.push(powerup)
@@ -466,18 +518,18 @@ class Room {
             }, 5000)
           }
         }, 100);
+      });
 
-        function checkForDraw(players: Player[]) {
-          let maxWins = Math.max(...players.map((player: Player) => player.wins));
-          let playersWithMaxWins = players.filter((player: Player) => player.wins === maxWins);
-          return playersWithMaxWins.length > 1;
+      function checkForDraw(players: Player[]) {
+        let maxWins = Math.max(...players.map((player: Player) => player.wins));
+        let playersWithMaxWins = players.filter((player: Player) => player.wins === maxWins);
+        return playersWithMaxWins.length > 1;
       }
 
-        if (i >= this.options.originalRounds) {
-          let draw = checkForDraw(this.players)
-          if (draw) this.options.actualRounds += 1
-        }
-      });
+      if (i >= this.options.originalRounds-1) {
+        let draw = checkForDraw(this.players)
+        if (draw) this.options.actualRounds += 1
+      }
     }
 
     this.gameInProgress = false;
@@ -608,6 +660,18 @@ io.on('connection', (socket) => {
     }
   })
 
+  socket.on('start-speaking', () => {
+    if (room && localPlayer) {
+      localPlayer.speaking = true
+    }
+  }) 
+
+  socket.on('stop-speaking', () => {
+    if (room && localPlayer) {
+      localPlayer.speaking = false
+    }
+  })
+
   socket.on('disconnect', () => {
     console.log(`[${getTime()}] (${socket.id}): User has disconnected.`)
     
@@ -621,9 +685,8 @@ io.on('connection', (socket) => {
   });
 
   socket.on("play-sound", (data: GlobalSoundData) =>{
-    socket.emit("play-sound", data);
+    io.to(room.channelId.toString()).emit("play-sound", data);
   })
 });
 
-ViteExpress.bind(app, server);
 ViteExpress.bind(app, io);

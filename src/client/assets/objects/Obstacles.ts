@@ -44,4 +44,32 @@ class Fire {
     controller: GameObj;
 }
 
-export { Fire };
+class Ice {
+    constructor (origin: Projectile, position: Vec2) {
+        this.origin = origin;
+        this.controller = add([
+            sprite("Ice"),
+            anchor("center"),
+            area(),
+            body({ isStatic: true}),
+            scale(.7),
+            timer(),
+            pos(position),
+            offscreen({ destroy: true }),
+            z(0),
+            "Ice",
+            {
+                data: this,
+            },
+        ])
+
+        this.controller.wait(5, () =>{
+            destroy(this.controller);
+        })
+    }
+
+    origin: Projectile;
+    controller: GameObj;
+}
+
+export { Fire, Ice };

@@ -2,7 +2,7 @@ import { GameObj, Vec2 } from "kaboom";
 import "kaboom/global";
 
 import { Tank } from "../objects/Tank";
-import { Fire } from "../objects/Obstacles";
+import { Ice, Fire } from "../objects/Obstacles";
 
 // MATHEMATICAL FUNCTIONS
 const DEG_TO_RAD: number = Math.PI / 180;
@@ -55,15 +55,15 @@ class Projectile {
 }
 
 class IceProjectile extends Projectile {
-    updateController () {
-        const projectileData: Projectile = this;
-        const projectileController: GameObj = projectileData.controller;
-        const directionVector: Vec2 = angleToVector(projectileData.angle);
+    constructor (tank: Tank, originPosition: Vec2, angle: number) {
+        super(tank, originPosition, angle)
+        this.controller.wait(0.25, () =>{
+            let l = loop(0.25, () =>{
+                if (this.controller) new Ice (this, this.controller.pos);
+            })
 
-        projectileController.pos = projectileController.pos.add(directionVector.scale(projectileData.speed * dt() * 50));
-        projectileController.angle = projectileData.angle;
-
-        
+            this.controller.onDestroy(() => l.cancel())
+        })
     }
 }
 

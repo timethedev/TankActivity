@@ -51,13 +51,17 @@ loadSprite("BlueTurret", "/tanks/blue/Turret.png")
 
 loadSprite("TurretOutline", "/tanks/TurretOutline.png")
 
-
 loadSprite("Fire", `/assets/fire.png`)
+loadSprite("Ice", `/assets/powerups/iceCube.png`)
 loadSprite("PowerupOrb", "/assets/PowerupOrb.png")
 
 loadSprite("Sea", "/assets/Sea.png")
 
-
+const shootSound = new Sound("/sounds/explosion.wav");
+const shootAttemptSound = new Sound("/sounds/invalid-shoot.wav");
+const explosionSound = new Sound("/sounds/explosion.wav");
+const grabPowerUpSound = new Sound("/sounds/grab-powerup.mp3");
+const splashSound = new Sound("/sounds/splash.mp3");
 
 
 
@@ -95,23 +99,53 @@ onUpdate("Projectile", (projectileController: GameObj) => { // Use Projectile ty
 onKeyPress("space", () => { // Shoot projectile
     if (!reloading) {
         localClientTank.shoot(socket)
-
-        const shootSound = new Sound("/sounds/explosion.wav");
         shootSound.globalPlay(localClientUserId, socket, 1, 0.7);
     } else {
         shake(2)
-        const shootAttemptSound = new Sound("/sounds/invalid-shoot.wav");
         shootAttemptSound.localPlay(0.6);
     }
 });
 
 
-const CAM = true
+const CAM = false
 let allPolygons: Vec2[] = []
+let allPoints: GameObj[] = []
+let mode: number = 1
+
+const rn5 = (x: number): number => Math.round(x / 5) * 5 
+
+onDraw(() => {
+    for (let i = 0; i < allPoints.length - 1; i++) {
+        let p1 = allPoints[i]?.pos;
+        let p2 = allPoints[i + 1]?.pos;
+    
+        if (p1 && p2) {
+            drawLine({
+                p1: p1,
+                p2: p2,
+                width: 5,
+                color: rgb(0, 0, 255),
+            });
+        }
+    }    
+})
 
 if (!CAM) {
     onClick(() => {
-        const mP = toWorld(mousePos())
+        let mP: any = toWorld(mousePos())
+
+        allPoints.push(add([
+            color(255, 0, 0),
+            z(100),
+            anchor("center"),
+            rect(10, 10),
+            pos(mP)
+        ]))
+        
+        if (mode == 2) {
+            mP = [rn5(mP.x), rn5(mP.y)]
+        }
+
         allPolygons.push(mP)
 
         debug.log("")
@@ -121,9 +155,20 @@ if (!CAM) {
     onKeyPress("enter", () => {
         downloadJSON("polygons.json", allPolygons)
     })
-    onKeyPress("escape", () => {
+    function deletepoints() {
+        debug.log("Deleted all points")
         allPolygons = []
-    })
+        allPoints.forEach(destroy)
+        allPoints = []
+    }
+    function changeMode(m: number) {
+        debug.log("Changed mode to " + m)
+        mode = m
+        deletepoints()
+    }
+    onKeyPress("escape", deletepoints)
+    onKeyPress("1", () => changeMode(1))
+    onKeyPress("2", () => changeMode(2))
 }
 
 let map = Maps[mapId]
@@ -160,6 +205,7 @@ map.details.forEach((detail) => {
 
     if (detail.img) comps.push(sprite(detail.name));
     if (detail.size) comps.push(rect(detail.size[0], detail.size[1]));
+    if (detail.anchor) comps.push(anchor(detail.anchor))
     if (detail.rot) comps.push(rotate(detail.rot))
     if (detail.pos) comps.push(pos(detail.pos.x, detail.pos.y))
     if (detail.kill) comps.push("Killer")
@@ -227,14 +273,32 @@ onUpdate(() => { // Control Camera Dynamic Zoom Effect
         ratio = 1.25
     }
 
-    tween(camPos(), vec2(averageX, averageY), 0.35, (r) => { camPos(r.x, r.y) }, easings.easeOutQuad)
-    if(CAM) tween(camScale(), vec2(ratio, ratio), 0.35, (r) => { camScale(r.x, r.y) }, easings.easeOutQuad)
+    if(CAM) tween(camPos(), vec2(averageX, averageY), 0.2, (r) => { camPos(r.x, r.y) }, easings.easeOutQuad)
+    if(CAM) tween(camScale(), vec2(ratio, ratio), 0.2, (r) => { camScale(r.x, r.y) }, easings.easeOutQuad)
 });
 
+function moveCam(x: number, y: number) {
+    let c = camPos()
+    camPos(c.x + x, c.y + y)
+}
 
-
-
-
+if (!CAM) {
+    onKeyDown("up", () => {
+        moveCam(0, -3)
+    })
+    
+    onKeyDown("down", () => {
+        moveCam(0, 3)
+    })
+    
+    onKeyDown("right", () => {
+        moveCam(3, 0)
+    })
+    
+    onKeyDown("left", () => {
+        moveCam(-3, 0)
+    })
+}
 
 
 // localClient-SIDE SERVER MANAGEMENT
@@ -287,7 +351,7 @@ function updatePlayerData(allPlayerData: PlayerData[]) {
         const playerData: PlayerData | undefined = allPlayerData.find((playerData) => playerController.data.userId == playerData.userId)
         
         if (!playerData || playerData?.alive == false) {
-            shake(2)
+            shake(3)
             destroy(playerController.data?.turretData.controller)
             destroy(playerController.data?.turretData.controllerOutline)
             destroy(playerController)
@@ -341,10 +405,6 @@ socket.on("shoot-projectile", (data: any) => {
 
 
 
-
-
-
-
 //when bullet collides with tank
 onCollide("Tank", "Projectile", (tankObj: GameObj, projectileObj: GameObj) => {
     const tank: Tank = tankObj.data
@@ -360,7 +420,6 @@ onCollide("Tank", "Projectile", (tankObj: GameObj, projectileObj: GameObj) => {
 })
 
 onCollide("Projectile", "Collider", (projectileObj: GameObj) => {
-    const explosionSound = new Sound("/sounds/explosion.wav");
     explosionSound.localPlay(0.6);
 
     destroy(projectileObj)
@@ -372,7 +431,6 @@ onCollide("Tank", "Powerup", (tankObj: GameObj, powerupObj: GameObj) => {
     const powerup: Powerup = powerupObj.data
     
     if (tank.userId == localClientUserId) {
-        const grabPowerUpSound = new Sound("/sounds/grab-powerup.mp3");
         grabPowerUpSound.localPlay(1);
 
         socket.emit("collect-powerup", {
@@ -381,19 +439,27 @@ onCollide("Tank", "Powerup", (tankObj: GameObj, powerupObj: GameObj) => {
     }
 })
 
+function localKill(tankData: Tank) {
+    socket.emit("kill-tank", {
+        senderUserId: tankData.userId,
+        recieverUserId: tankData.userId
+    })
+}
+
 //when tank collied with killer
 onCollide("Tank", "Killer", (tankObj: GameObj) => {
     const tankData: Tank = tankObj.data
     
     if (tankData.userId == localClientUserId) {
-        const explosionSound = new Sound("/sounds/explosion.wav");
-        explosionSound.globalPlay(tankData.userId, socket, 1, 0.2);
-        
-        socket.emit("kill-tank", {
-            senderUserId: tankData.userId,
-            recieverUserId: tankData.userId
-        })
+        splashSound.globalPlay(localClientUserId, socket, .15, 0)
+        localKill(tankData)
     }
+})
+
+//when tank collied with killer
+onCollide("Tank", "Fire", (tankObj: GameObj) => {
+    const tankData: Tank = tankObj.data
+    if (tankData.userId == localClientUserId) localKill(tankData)
 })
 
 function rayCasting(point: any, polygon: any) {
@@ -431,6 +497,8 @@ onUpdate("Tank", (tankObj: GameObj) => {
 
     if (!insidePolygon && !dead && tankData.userId == localClientUserId) {
         dead = true
+
+        splashSound.globalPlay(localClientUserId, socket, .15, 0)
 
         socket.emit("kill-tank", {
             senderUserId: tankData.userId,

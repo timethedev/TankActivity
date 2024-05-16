@@ -7,13 +7,15 @@
     members: Array,
     rounds: Number,
     playerData: Array,
-    scoreboardEnabled: Boolean
+    scoreboardEnabled: Boolean,
+    overtime: Boolean
   })
   
   const scoreboardEnabled = ref(props.scoreboardEnabled)
   const members = ref(props.members)
   const playerData = ref(props.playerData)
   const rounds = ref(props.rounds)
+  const overtime = ref(props.overtime)
 
   watch(() => props.members, (m) => {
     members.value = m;
@@ -30,12 +32,16 @@
   watch(() => props.playerData, (p) => {
     playerData.value = p
   })
+
+  watch(() => props.overtime, (p) => {
+    overtime.value = p
+  })
 </script>
 
 <template>
   <div :class="`scoreboardContainer ${!scoreboardEnabled && 'hidden'}`">
     <div class="scoreboard">
-        <h1>Scoreboard</h1>
+        <h1>Scoreboard {{ overtime == true ? ' - Overtime!' : ''}}</h1>
         <PlayerBar v-for="member in members" :key="member" :playerData="playerData" :member="member" :rounds="rounds"/>
     </div>
   </div>
@@ -43,7 +49,6 @@
 
 <style scoped>
   .scoreboardContainer * {
-
     font-family: "Fredoka Variable", sans-serif;
   }
 
@@ -51,9 +56,8 @@
     position:absolute;
     width:100vw;
     height:100vh;
-    background:rgba(0,0,0,.8);
+    background:black;
     padding:5vw 15vw;
-    border: 1vw solid black;
     box-sizing: border-box;
 
     top:0;
@@ -65,11 +69,22 @@
     z-index:7;
   }
 
+  .scoreboardContainer:not(.hidden) {
+    animation-name: maskIn;
+    animation-duration: .5s;
+    animation-fill-mode: forwards;
+  }
+
   .scoreboardContainer.hidden {
-    display:none;
+    pointer-events: none;
+
+    animation-name: maskOut;
+    animation-duration: .5s;
+    animation-fill-mode: forwards;
   }
 
   h1 {
+    font-family: "Montserrat Variable", sans-serif;
     text-align:center;
     margin:0;
     margin-bottom: 2vw;
@@ -85,13 +100,28 @@
   }
 
   .scoreboard {
-    background:white;
     padding: 2.2vw;
     border-radius:1vw;
     box-sizing:border-box;
     height:min-content;
+  }
 
-    box-shadow: 0px .4vw 1vw 0px rgba(0,0,0,.5);
+  @keyframes maskIn {
+      0% {
+          clip-path: circle(0% at center); /* Initial clip-path */
+      }
+      100% {
+          clip-path: circle(100vw at center); /* Final clip-path */
+      }
+  }
+
+  @keyframes maskOut {
+      0% {
+          clip-path: circle(100vw at center); /* Initial clip-path */
+      }
+      100% {
+          clip-path: circle(0% at center); /* Final clip-path */
+      }
   }
 </style>
 

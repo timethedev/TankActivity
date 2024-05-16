@@ -6,11 +6,13 @@
 
   const props = defineProps({
     members: Array,
-    spectating: Boolean
+    spectating: Boolean,
+    allPlayerData: Object
   })
   
   const members = ref(props.members)
   const spectating = ref(props.spectating)
+  const allPlayerData = ref(props.allPlayerData)
 
   watch(() => props.members, (m) => {
     members.value = m;
@@ -19,11 +21,15 @@
   watch(() => props.spectating, (s) => {
     spectating.value = s;
   });
+
+  watch(() => props.allPlayerData, (s) => {
+    allPlayerData.value = s;
+  });
 </script>
 
 <template>
   <div :class="`playerPill ${spectating && 'spectating'}`">
-    <PlayerIcon v-for="member in members" :key="member" :member="member"/>
+    <PlayerIcon v-for="member in members" :allPlayerData="allPlayerData" :key="member" :member="member"/>
     <InviteButton/>
   </div>
 </template>

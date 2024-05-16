@@ -9,7 +9,7 @@
 </script>
 
 <template>
-  <div class="iconButton">
+  <div class="iconButton" v-hover-sound>
     <img :src="icon"/>
   </div>
 </template>
