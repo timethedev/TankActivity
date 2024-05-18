@@ -678,7 +678,7 @@ io.on('connection', (socket) => {
   
 
   socket.on("emit-particle", (data: any) => {
-    io.to(room.channelId.toString()).emit("emit-particle", {userId: data.userId, particleEffect: data.particleEffect})
+    io.to(room.channelId.toString()).emit("emit-particle", data)
   })
 
 

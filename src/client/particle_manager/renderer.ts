@@ -14,7 +14,6 @@ function averageColorFromPercentage(percentage: number, min: Color, max: Color) 
 	)
 }
 
-
 export class Particle {
 	private data: ParticleData;
 

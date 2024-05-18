@@ -79,8 +79,19 @@ function distance(pos1: Vec2, pos2: Vec2): number {
 }
 
 // Multiplayer Particles
-function EmitGlobalParticle(particleEffect: ParticleEffect) {
-    socket.emit("emit-particle", {userId: localClientUserId, particleEffect});
+function EmitGlobalParticle(particleEffectData: ParticleEffectData, origin: any) {
+    const p = new ParticleEffect(particleEffectData, {
+        position: vec2(origin.position.x, origin.position.y),
+        angle: origin.angle
+    })
+    p.emit()
+    onDraw(() => p.render())
+
+    socket.emit("emit-particle", {
+        userId: localClientUserId, 
+        particleEffectData: particleEffectData,
+        origin: origin
+    });
 }
 
 
@@ -470,13 +481,11 @@ onCollide("Tank", "Killer", (tankObj: GameObj) => {
     
     if (!dead && tankData.userId == localClientUserId) {
         splashSound.globalPlay(localClientUserId, socket, .15, 0)
-
-        const WaterSplashEffect = new ParticleEffect(WaterSplashEffectData, {
+        
+        EmitGlobalParticle(WaterSplashEffectData, {
             position: localClientTank.controller.pos,
             angle: 180
         })
-        WaterSplashEffect.emit()
-        EmitGlobalParticle(WaterSplashEffect)
 
         localKill(tankData)
     }
@@ -524,15 +533,12 @@ onUpdate("Tank", (tankObj: GameObj) => {
     if (!insidePolygon && !dead && tankData.userId == localClientUserId) {
         dead = true
 
-        const WaterSplashEffect = new ParticleEffect(WaterSplashEffectData, {
+        splashSound.globalPlay(localClientUserId, socket, .15, 0)
+
+        EmitGlobalParticle(WaterSplashEffectData, {
             position: localClientTank.controller.pos,
             angle: 180
         })
-        WaterSplashEffect.emit()
-
-        splashSound.globalPlay(localClientUserId, socket, .15, 0)
-        onDraw(() => WaterSplashEffect.render())
-        EmitGlobalParticle(WaterSplashEffect)
         
         socket.emit("kill-tank", {
             senderUserId: tankData.userId,
@@ -542,17 +548,19 @@ onUpdate("Tank", (tankObj: GameObj) => {
 })
 
 
-
-
 socket.on("emit-particle", (data: any) =>{
     const userId: number = data.userId;
-    const particleEffect: ParticleEffect = data.particleEffect;
-    debug.log(particleEffect.particles.length)
-    if (userId == localClientUserId) return;
-    debug.log("hurewefewfwefewfwedwefsdfwefwfewfwefwefweff")
-
-    particleEffect.emit();
-    onDraw(() => particleEffect.render());
+    const particleEffectData: ParticleEffectData = data.particleEffectData;
+    const position: Vec2 = data.origin.position
+    
+    if (userId != localClientUserId) {
+        let p = new ParticleEffect(particleEffectData, {
+            position: vec2(position.x, position.y),
+            angle: data.origin.angle
+        })
+        p.emit();
+        onDraw(() => p.render());
+    } 
 })
 
 
