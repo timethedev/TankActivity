@@ -672,6 +672,16 @@ io.on('connection', (socket) => {
     }
   })
 
+  socket.on("play-sound", (data: GlobalSoundData) =>{
+    io.to(room.channelId.toString()).emit("play-sound", data);
+  })
+  
+
+  socket.on("emit-particle", (data: any) => {
+    io.to(room.channelId.toString()).emit("emit-particle", {userId: data.userId, particleEffect: data.particleEffect})
+  })
+
+
   socket.on('disconnect', () => {
     console.log(`[${getTime()}] (${socket.id}): User has disconnected.`)
     
@@ -683,10 +693,6 @@ io.on('connection', (socket) => {
       room.removePlayer(userId);
     }
   });
-
-  socket.on("play-sound", (data: GlobalSoundData) =>{
-    io.to(room.channelId.toString()).emit("play-sound", data);
-  })
 });
 
 ViteExpress.bind(app, io);

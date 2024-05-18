@@ -10,6 +10,13 @@ import { Powerup } from "../assets/objects/Powerup"
 import Maps from "../../common/Maps";
 import { Sound } from "../assets/SoundManager";
 
+import ParticleEffect from "../particle_manager/renderer";
+import WaterSplashEffectData from "./../particle_manager/particles/WaterSplash";
+import PlayerDeathEffectData from "./../particle_manager/particles/PlayerDeath";
+import { ParticleEffectData } from "../particle_manager/types";
+
+
+
 
 
 /////////// START //////////////////
@@ -65,9 +72,20 @@ const splashSound = new Sound("/sounds/splash.mp3");
 
 
 
+
+
 function distance(pos1: Vec2, pos2: Vec2): number {
     return Math.sqrt((pos1.x - pos2.x) ** 2 + (pos1.y - pos2.y) ** 2);
 }
+
+// Multiplayer Particles
+function EmitGlobalParticle(particleEffect: ParticleEffect) {
+    socket.emit("emit-particle", {userId: localClientUserId, particleEffect});
+}
+
+
+
+
 
 
 // GAMEOBJECT BEHAVIOUR
@@ -102,7 +120,7 @@ onKeyPress("space", () => { // Shoot projectile
         shootSound.globalPlay(localClientUserId, socket, 1, 0.7);
     } else {
         shake(2)
-        shootAttemptSound.localPlay(0.6);
+        shootAttemptSound.localPlay(0.6, undefined!);
     }
 });
 
@@ -420,7 +438,7 @@ onCollide("Tank", "Projectile", (tankObj: GameObj, projectileObj: GameObj) => {
 })
 
 onCollide("Projectile", "Collider", (projectileObj: GameObj) => {
-    explosionSound.localPlay(0.6);
+    explosionSound.localPlay(0.6, undefined!);
 
     destroy(projectileObj)
 })
@@ -431,7 +449,7 @@ onCollide("Tank", "Powerup", (tankObj: GameObj, powerupObj: GameObj) => {
     const powerup: Powerup = powerupObj.data
     
     if (tank.userId == localClientUserId) {
-        grabPowerUpSound.localPlay(1);
+        grabPowerUpSound.localPlay(1, undefined!);
 
         socket.emit("collect-powerup", {
             powerup: powerup.powerupData
@@ -450,8 +468,16 @@ function localKill(tankData: Tank) {
 onCollide("Tank", "Killer", (tankObj: GameObj) => {
     const tankData: Tank = tankObj.data
     
-    if (tankData.userId == localClientUserId) {
+    if (!dead && tankData.userId == localClientUserId) {
         splashSound.globalPlay(localClientUserId, socket, .15, 0)
+
+        const WaterSplashEffect = new ParticleEffect(WaterSplashEffectData, {
+            position: localClientTank.controller.pos,
+            angle: 180
+        })
+        WaterSplashEffect.emit()
+        EmitGlobalParticle(WaterSplashEffect)
+
         localKill(tankData)
     }
 })
@@ -498,14 +524,38 @@ onUpdate("Tank", (tankObj: GameObj) => {
     if (!insidePolygon && !dead && tankData.userId == localClientUserId) {
         dead = true
 
-        splashSound.globalPlay(localClientUserId, socket, .15, 0)
+        const WaterSplashEffect = new ParticleEffect(WaterSplashEffectData, {
+            position: localClientTank.controller.pos,
+            angle: 180
+        })
+        WaterSplashEffect.emit()
 
+        splashSound.globalPlay(localClientUserId, socket, .15, 0)
+        onDraw(() => WaterSplashEffect.render())
+        EmitGlobalParticle(WaterSplashEffect)
+        
         socket.emit("kill-tank", {
             senderUserId: tankData.userId,
             recieverUserId: tankData.userId
         })
     } 
 })
+
+
+
+
+socket.on("emit-particle", (data: any) =>{
+    const userId: number = data.userId;
+    const particleEffect: ParticleEffect = data.particleEffect;
+    debug.log(particleEffect.particles.length)
+    if (userId == localClientUserId) return;
+    debug.log("hurewefewfwefewfwedwefsdfwefwfewfwefwefweff")
+
+    particleEffect.emit();
+    onDraw(() => particleEffect.render());
+})
+
+
 
 
 add([
